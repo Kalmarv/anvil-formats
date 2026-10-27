@@ -73,27 +73,60 @@ use primase_foundations::bytes::Field;
 /// Why an Animation body or a track's values can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body ends before a field is complete.
     #[error("animation body: {0}")]
     Short(#[from] primase_foundations::bytes::FieldError),
+    /// A value the grammar fixes or bounds is another (first byte, object types, fixed words).
     #[error("animation {what}: {found:#x} at {at}, not {read}")]
     Value {
+        /// The field refused.
         what: &'static str,
+        /// The byte offset in the body.
         at: usize,
+        /// The value found, widened to `u64`.
         found: u64,
+        /// What the grammar reads there, in words.
         read: &'static str,
     },
+    /// An embedded 10-byte reference is neither the present nor the empty form.
     #[error("animation reference at {at}: {why}")]
-    Reference { at: usize, why: String },
+    Reference {
+        /// The body offset of the reference.
+        at: usize,
+        /// The reference error, in words.
+        why: String,
+    },
+    /// A track's tag selects a kind whose value width is not in [`value_width`].
     #[error("animation track {track}: tag {tag:#04x} is kind {kind}, whose value width isn't read")]
-    Kind { track: usize, tag: u8, kind: u8 },
+    Kind {
+        /// The track's position.
+        track: usize,
+        /// The tag byte.
+        tag: u8,
+        /// The kind, the tag over 3.
+        kind: u8,
+    },
+    /// A track block is malformed (for example no keys, or a key mask whose set bits are not the key count).
     #[error("animation track {track}: {why}")]
-    Track { track: usize, why: String },
+    Track {
+        /// The track's position.
+        track: usize,
+        /// What is wrong with it.
+        why: String,
+    },
+    /// The values of a track of this kind are not decoded by [`StoredTrack::values`].
     #[error("animation tracks of kind {kind}: their values aren't read")]
-    Unread { kind: u8 },
+    Unread {
+        /// The track kind.
+        kind: u8,
+    },
+    /// A track's values do not decode: their count is not the key count, or a packed value has a bit set that must be clear.
     #[error("animation track values: {0}")]
     Values(String),
+    /// Bytes remain after the last track; the count is how many.
     #[error("animation body: {0} bytes after its last track")]
     Trailing(usize),
+    /// The event array's `count` elements were skipped without finding the `AnimTrackData` object that follows them.
     #[error("animation events: no AnimTrackData after the {0} events")]
     NoTrackData(u32),
 }
@@ -111,36 +144,47 @@ pub struct StoredAnimation {
     pub arrays: [Vec<u16>; 2],
     /// The four booleans (`1F4DA15F`, `93847F6A`, `ABC2D4B8`, `0D7D1D50`).
     pub flags: [u8; 4],
+    /// The `AnimTrackEvent` array.
     pub events: StoredEvents,
     /// The `AnimTrackData` object's id (0 on every clip) and its `567530C5`.
     pub track_data_id: u64,
+    /// The u32 `567530C5` of the `AnimTrackData` object.
     pub track_data_hash: u32,
     /// Each track's bone: the CRC-32 of its name (0 for the root's), the mappings in the tracks' order.
     pub mappings: Vec<u32>,
     /// `66A6DC91`.
     pub track_data_tail: u16,
+    /// The `TTECLAnimation` object, or `None` where the pointer is the empty form (`03`).
     pub ecl: Option<StoredEcl>,
     /// `B832D26F`, a byte buffer (empty on every clip).
     pub buffer: Vec<u8>,
     /// `CB4E5F18`.
     pub cb4e: u32,
+    /// The tracks, in stored order, one per mapping.
     pub tracks: Vec<StoredTrack>,
 }
 
 /// An Animation's `TTECLAnimation` object, its four arrays as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredEcl {
+    /// The `TTECLAnimation` object's id.
     pub id: u64,
+    /// The first byte array, as stored.
     pub animation: Vec<u8>,
+    /// The u32 array, as stored.
     pub words: Vec<u32>,
+    /// The u16 array, as stored.
     pub halves: Vec<u16>,
+    /// The last byte array, as stored.
     pub bytes: Vec<u8>,
 }
 
 /// An Animation's `AnimTrackEvent` array as stored: the count and the elements' bytes (not read).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredEvents {
+    /// The element count stored before the events' bytes.
     pub count: u32,
+    /// The events' bytes between the count and the next field, as stored; their layout is not read.
     pub bytes: Vec<u8>,
 }
 
@@ -148,11 +192,15 @@ pub struct StoredEvents {
 /// the values (`keys` of the kind's width, as bytes). The bone it drives is the clip's mapping at its position.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredTrack {
+    /// The block's tag byte, `3 * kind + w` ([`StoredTrack::kind`], [`StoredTrack::time_form`]).
     pub tag: u8,
     /// The block's `a` field, its in-memory size (within 8 of the stored payload's length on every clip).
     pub size: u32,
+    /// The key count (u32); at least 1.
     pub keys: u32,
+    /// The key times as stored.
     pub times: Times,
+    /// The `keys` values of the kind's width ([`value_width`]), as bytes; [`StoredTrack::values`] decodes some kinds.
     pub values: Vec<u8>,
 }
 
@@ -164,7 +212,12 @@ pub enum Times {
     /// A u16 for each key after the first.
     U16(Vec<u16>),
     /// A bit mask of the frames that hold a key, with its marker byte's top two bits (`mode`: 1, 2 or 3).
-    Mask { mode: u8, mask: Vec<u8> },
+    Mask {
+        /// The marker byte's top two bits (1, 2 or 3).
+        mode: u8,
+        /// The mask bytes: bit `b` of byte `i` says whether frame `8 * i + b` holds a key.
+        mask: Vec<u8>,
+    },
 }
 
 /// A track's values decoded ([`StoredTrack::values`]).

@@ -20,27 +20,27 @@ use primase_foundations::bytes::{Cursor, Field};
 /// enum, the imposter shader levels, and the 23 bytes after them that the class list doesn't name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GrassModelSettings {
-    /// `ZOffset` (f32), as stored.
+    /// The z offset (f32), as stored; its unit and effect are not interpreted.
     pub z_offset: f32,
-    /// `HeightScaleForOcclusion` (f32), as stored.
+    /// The height scale for occlusion (f32), as stored; its unit and effect are not interpreted.
     pub height_scale_for_occlusion: f32,
-    /// `TerrainNormalFollowerRatio` (f32), as stored.
+    /// The terrain normal follower ratio (f32), as stored; its unit and effect are not interpreted.
     pub terrain_normal_follower_ratio: f32,
-    /// `RootHeight` (f32), as stored.
+    /// The root height (f32), as stored; its unit and effect are not interpreted.
     pub root_height: f32,
-    /// `Softness` (f32), as stored.
+    /// The softness (f32), as stored; its unit and effect are not interpreted.
     pub softness: f32,
-    /// `NormalBendFactor` (f32), as stored.
+    /// The normal bend factor (f32), as stored; its unit and effect are not interpreted.
     pub normal_bend_factor: f32,
-    /// `VisibleVirtualLODCount` (u8), as stored.
+    /// The visible virtual lod count (u8), as stored; its unit and effect are not interpreted.
     pub visible_virtual_lod_count: u8,
-    /// `TextureAtlasElementCount` (u8), as stored.
+    /// The texture atlas element count (u8), as stored; its unit and effect are not interpreted.
     pub texture_atlas_element_count: u8,
     /// `RaycastTranslucency` (the enum `GrassModel::RaycastTranslucency`).
     pub raycast_translucency: u32,
     /// `ImposterStartShaderModelLodIndex` and the two after it: three bytes.
     pub imposter_shader_start_model_lod_index: [u8; 3],
-    /// `ImposterLookAtRatio` (f32), as stored.
+    /// The imposter lookat ratio (f32), as stored; its unit and effect are not interpreted.
     pub imposter_lookat_ratio: f32,
     /// The 23 bytes that follow, as stored: a LOD table of 5 bytes (`00 01 02 03 03`), four f32 and 2 bytes.
     pub unnamed: [u8; 23],
@@ -95,11 +95,11 @@ pub struct StoredGrassRule {
     /// `GrassModelIndex`: the position in the setup's ManagedEntities (and the library's models). 0 to 50 occur;
     /// 46 to 50 name no model.
     pub model: u16,
-    /// `TilingLogCount` (u8), as stored.
+    /// The tiling log count (u8), as stored; its unit and effect are not interpreted.
     pub tiling_log_count: u8,
-    /// `Density` (f32), as stored.
+    /// The density (f32), as stored; its unit and effect are not interpreted.
     pub density: f32,
-    /// `TiltFactor` (f32), as stored.
+    /// The tilt factor (f32), as stored; its unit and effect are not interpreted.
     pub tilt_factor: f32,
     /// Whether scaling applies; stored as a byte, true when nonzero.
     pub scaling_enabled: bool,
