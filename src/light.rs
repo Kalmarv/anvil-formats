@@ -5,50 +5,88 @@
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
+
+use crate::fields::{BodyError, LE, body_error, length, refuse};
+use primase_foundations::bytes::{Field, View};
+
+/// A SpotLight's stored light, every number as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredSpotLight {
+    /// The LightColor's four lanes (red, green, blue, alpha).
     pub color: [f32; 4],
     pub intensity: f32,
     pub luminance: f32,
+    /// The cone's inner angle, radians.
     pub inner: f32,
+    /// The cone's outer angle, radians (at most pi).
     pub outer: f32,
     pub range: f32,
     pub near: f32,
 }
+/// The SpotLight component's type id.
 pub const SPOT_LIGHT: u32 = 0x8032_0FB8;
 
+/// A SpotLight body's length.
+const SPOT_LENGTH: usize = 328;
+/// A LightInstance's length.
+const INSTANCE_LENGTH: usize = 311;
+
+/// Why a SpotLight or LightInstance body can't be read.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("light {0}")]
+    Body(#[from] BodyError),
+}
+body_error!(Error, Error::Body);
+
 impl StoredSpotLight {
-    pub fn parse(body: &[u8]) -> Result<Self, String> {
-        if body.len() != 328 {
-            return Err(format!("SpotLight: {} bytes, expected 328", body.len()));
+    /// A SpotLight's body (328 bytes), every float finite and not negative, the cone ordered.
+    pub fn parse(body: &[u8]) -> Result<Self, Error> {
+        if body.len() != SPOT_LENGTH {
+            return Err(length("SpotLight length", body.len(), "328 bytes").into());
         }
-        if body.get(34..38) != Some(&0xA797_67EDu32.to_le_bytes()) {
-            return Err("SpotLight: missing LightColor class at 34".into());
+        let v = View::new(body);
+        let class = v.u32(34, LE).field("LightColor class")?;
+        if class != 0xA797_67ED {
+            return Err(refuse("LightColor class", 34, class.into(), "0xa79767ed").into());
         }
-        let float = |at: usize| -> Result<f32, String> {
-            let end = at.checked_add(4).ok_or("SpotLight: float offset overflow")?;
-            let value = f32::from_le_bytes(
-                body.get(at..end)
-                    .and_then(|b| b.try_into().ok())
-                    .ok_or("SpotLight: missing float")?,
-            );
+        let float = |at: usize, what: &'static str| -> Result<f32, Error> {
+            let bits = v.u32(at, LE).field(what)?;
+            let value = f32::from_bits(bits);
             if value.is_finite() && value >= 0.0 {
                 Ok(value)
             } else {
-                Err(format!("SpotLight: invalid value at {at}"))
+                Err(refuse(what, at, bits.into(), "a finite number, not negative").into())
             }
         };
         let light = Self {
-            color: [float(38)?, float(42)?, float(46)?, float(50)?],
-            intensity: float(54)?,
-            luminance: float(58)?,
-            inner: float(308)?,
-            outer: float(312)?,
-            range: float(320)?,
-            near: float(324)?,
+            color: [
+                float(38, "color red")?,
+                float(42, "color green")?,
+                float(46, "color blue")?,
+                float(50, "color alpha")?,
+            ],
+            intensity: float(54, "intensity")?,
+            luminance: float(58, "luminance")?,
+            inner: float(308, "inner angle")?,
+            outer: float(312, "outer angle")?,
+            range: float(320, "range")?,
+            near: float(324, "near")?,
         };
-        if light.inner > light.outer || light.outer > std::f32::consts::PI || light.range == 0.0 {
-            return Err("SpotLight: invalid cone ordering or range".into());
+        if light.inner > light.outer {
+            return Err(refuse(
+                "inner angle",
+                308,
+                light.inner.to_bits().into(),
+                "at most the outer angle",
+            )
+            .into());
+        }
+        if light.outer > std::f32::consts::PI {
+            return Err(refuse("outer angle", 312, light.outer.to_bits().into(), "at most pi").into());
+        }
+        if light.range == 0.0 {
+            return Err(refuse("range", 320, light.range.to_bits().into(), "above zero").into());
         }
         Ok(light)
     }
@@ -56,22 +94,26 @@ impl StoredSpotLight {
 
 /// The light reference is embedded in LightInstance, not its Visual's object field. Its leading 03 01 is the
 /// established managed reference form here; it must not be passed to the generic null-reference decoder.
-pub fn instance_reference(bytes: &[u8]) -> Result<u64, String> {
-    if bytes.len() != 311 || bytes.get(12..16) != Some(&0x4AEC_3476u32.to_le_bytes()) {
-        return Err("LightInstance: invalid length or BoundingVolume class".into());
+pub fn instance_reference(bytes: &[u8]) -> Result<u64, Error> {
+    if bytes.len() != INSTANCE_LENGTH {
+        return Err(length("LightInstance length", bytes.len(), "311 bytes").into());
     }
-    let reference = bytes
-        .get(44..54)
-        .ok_or("LightInstance: missing light reference")?;
-    if reference.get(..2) != Some(&[3, 1]) {
-        return Err("LightInstance: expected managed light reference 03 01".into());
+    let v = View::new(bytes);
+    let class = v.u32(12, LE).field("BoundingVolume class")?;
+    if class != 0x4AEC_3476 {
+        return Err(refuse("BoundingVolume class", 12, class.into(), "0x4aec3476").into());
     }
-    Ok(u64::from_le_bytes(
-        reference
-            .get(2..10)
-            .and_then(|b| b.try_into().ok())
-            .ok_or("LightInstance: missing id")?,
-    ))
+    let form = v.array::<2>(44).field("light reference")?;
+    if form != [3, 1] {
+        return Err(refuse(
+            "light reference form",
+            44,
+            u64::from(u16::from_le_bytes(form)),
+            "the managed form 03 01",
+        )
+        .into());
+    }
+    Ok(v.u64(46, LE).field("light reference id")?)
 }
 
 #[cfg(test)]

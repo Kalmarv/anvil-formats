@@ -14,7 +14,9 @@ use std::path::Path;
 use crate::data::{Resource, read_entry};
 use crate::forge::Forge;
 
-/// A decoded resource's largest size the archive accepts (the forge's own sizes are checked).
+/// The largest decoded size of a block an [`Archive`] accepts unless told otherwise (64 MiB). A block that declares
+/// more is refused with [`crate::data::Error::Size`], never truncated; [`Archive::set_max_record`] raises or lowers the
+/// bound for an archive whose resources are larger (or to refuse a hostile one sooner).
 pub const MAX_RECORD: usize = 64 << 20;
 
 /// Why an archive can't be opened or an entry read.
@@ -39,6 +41,7 @@ pub enum Error {
 #[derive(Debug)]
 pub struct Archive {
     forges: Vec<(Forge, File)>,
+    max_record: usize,
 }
 
 /// An entry of one of an archive's forges: the forge's position in the order given, and the entry.
@@ -55,7 +58,21 @@ impl Archive {
             .iter()
             .map(|p| Ok((Forge::open(p)?, File::open(p)?)))
             .collect::<Result<_, Error>>()?;
-        Ok(Archive { forges })
+        Ok(Archive {
+            forges,
+            max_record: MAX_RECORD,
+        })
+    }
+
+    /// The largest decoded size [`Archive::resource`] accepts for a block ([`MAX_RECORD`] until set).
+    pub fn max_record(&self) -> usize {
+        self.max_record
+    }
+
+    /// Accept blocks of up to `bytes` decoded bytes from now on. The bound is what an entry's declared sizes are held
+    /// to before memory is made for them, so it is also the most one [`Archive::resource`] allocates for a block.
+    pub fn set_max_record(&mut self, bytes: usize) {
+        self.max_record = bytes;
     }
 
     /// The first forge, in the order given, holding `id`, and the entry there.
@@ -71,7 +88,8 @@ impl Archive {
         self.forges.get(forge).map(|(f, _)| f)
     }
 
-    /// The resource at `at`.
+    /// The resource at `at`: its entry decoded (each block of at most [`Archive::max_record`] bytes) and its header
+    /// parsed.
     pub fn resource(&mut self, at: At) -> Result<Resource, Error> {
         let (forge, file) = self.forges.get_mut(at.forge).ok_or(Error::NoForge(at.forge))?;
         let payload = forge.payload(file, at.entry)?;
@@ -80,7 +98,7 @@ impl Archive {
             entry: at.entry,
             source,
         };
-        let block = read_entry(&payload, MAX_RECORD).map_err(data)?;
+        let block = read_entry(&payload, self.max_record).map_err(data)?;
         Resource::parse(&block.resource.data).map_err(data)
     }
 }

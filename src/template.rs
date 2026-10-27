@@ -810,23 +810,45 @@ pub struct ShaderTables {
     pub feature_node: Vec<u8>,
 }
 
+/// Why a [`ShaderTables`] can't be used for lookups.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum TablesError {
+    /// A stage's keys are not strictly ascending, so a lookup could miss a key it holds or find two programs.
+    #[error("{stage:?} keys not strictly ascending: {first:#x} then {second:#x}")]
+    Unordered { stage: Stage, first: u32, second: u32 },
+    /// A key names a program the tables don't hold.
+    #[error("{stage:?} key {key:#x} names program {index} of {programs}")]
+    NoProgram {
+        stage: Stage,
+        key: u32,
+        index: usize,
+        programs: usize,
+    },
+}
+
 impl ShaderTables {
     /// What the lookups rely on: each stage's keys strictly ascending (a key twice would name two programs, and an
     /// unsorted list would miss keys it holds), and every index naming one of `programs`.
-    pub fn check(&self) -> Result<(), String> {
-        for (stage, table) in [("pixel", &self.pixel), ("vertex", &self.vertex)] {
+    pub fn check(&self) -> Result<(), TablesError> {
+        for (stage, table) in [(Stage::Pixel, &self.pixel), (Stage::Vertex, &self.vertex)] {
             let unordered = table.windows(2).find_map(|w| match w {
                 [(a, _), (b, _)] if a >= b => Some((*a, *b)),
                 _ => None,
             });
             if let Some((a, b)) = unordered {
-                return Err(format!("{stage} keys not strictly ascending: {a:#x} then {b:#x}"));
+                return Err(TablesError::Unordered {
+                    stage,
+                    first: a,
+                    second: b,
+                });
             }
             if let Some(&(key, index)) = table.iter().find(|&&(_, i)| i >= self.programs.len()) {
-                return Err(format!(
-                    "{stage} key {key:#x} names program {index} of {}",
-                    self.programs.len()
-                ));
+                return Err(TablesError::NoProgram {
+                    stage,
+                    key,
+                    index,
+                    programs: self.programs.len(),
+                });
             }
         }
         Ok(())
@@ -968,19 +990,33 @@ mod tests {
         let two_programs = [read[1].clone(), permutation(Stage::Pixel, 9, 300, c)];
         assert_eq!(
             shader_tables(&two_programs, &[]).check(),
-            Err("pixel keys not strictly ascending: 0x9 then 0x9".into())
+            Err(TablesError::Unordered {
+                stage: Stage::Pixel,
+                first: 9,
+                second: 9
+            })
         );
         // unsorted, and an index past the programs
         let mut t = shader_tables(&read, &[]);
         t.vertex.reverse();
-        assert!(
-            t.check()
-                .unwrap_err()
-                .starts_with("vertex keys not strictly ascending")
-        );
+        assert!(matches!(
+            t.check(),
+            Err(TablesError::Unordered {
+                stage: Stage::Vertex,
+                ..
+            })
+        ));
         t.vertex.reverse();
         t.pixel[0].1 = 3;
-        assert_eq!(t.check(), Err("pixel key 0x4 names program 3 of 3".into()));
+        assert_eq!(
+            t.check(),
+            Err(TablesError::NoProgram {
+                stage: Stage::Pixel,
+                key: 4,
+                index: 3,
+                programs: 3
+            })
+        );
     }
 
     /// A DXBC container of one SHEX chunk holding the version word `version`, checksummed as a template stores it.

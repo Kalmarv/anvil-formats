@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`Archive::open` reads only the index and name tables, so listing a 15 GB forge takes the time of its index. A Riders Republic forge's entries carry a type id the listing names as a `Kind` where this crate has a reader for it; a Shaun White Skateboarding forge's name records carry no type id, so read its entries with `forge::Forge::payload`, `data::read_entry` and `objects::read_objects` (see [`shaunwhite`](src/shaunwhite/mod.rs)).
+`Archive::open` reads only the index and name tables, so listing a 15 GB forge takes the time of its index. A Riders Republic forge's entries carry a type id the listing names as a `Kind` where this crate has a reader for it; a Shaun White Skateboarding forge's name records carry no type id, so a listing gives its entries no type id (`Listed::type_id` is `None`) and no kind; read its entries with `forge::Forge::payload`, `data::read_entry` and `objects::read_objects` (see [`shaunwhite`](src/shaunwhite/mod.rs)).
 
 ## What it guarantees
 

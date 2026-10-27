@@ -179,9 +179,11 @@ pub struct Listed<'a> {
     pub id: u64,
     /// Its name as the name table stores it.
     pub name: &'a str,
-    /// The type id as stored, whether or not a reader reads it.
-    pub type_id: u32,
-    /// Its kind, where a reader here reads its type.
+    /// The type id as stored, whether or not a reader reads it; `None` in a forge that stores none
+    /// ([`Forge::stores_type_ids`]: version 26, whose name records hold 0 where version 27's hold the id), so that
+    /// 0 is never mistaken for a type.
+    pub type_id: Option<u32>,
+    /// Its kind, where a reader here reads its type (always `None` where the forge states no type id).
     pub kind: Option<Kind>,
     /// Its payload's size in the file, bytes.
     pub size: i32,
@@ -189,16 +191,19 @@ pub struct Listed<'a> {
 
 impl Forge {
     /// Every entry, in table order, with its kind where a reader reads its type: from the tables alone, nothing
-    /// decoded.
+    /// decoded. A version-26 forge states no types, so its entries are all listed with no type id and no kind.
     pub fn listing(&self) -> impl Iterator<Item = Listed<'_>> {
-        self.entries().enumerate().map(|(entry, (index, name))| Listed {
-            entry,
-            id: index.id,
-            name: name.name.as_str(),
-            type_id: name.type_id,
-            kind: Kind::of(name.type_id),
-            size: index.size,
-        })
+        let typed = self.stores_type_ids();
+        self.entries()
+            .enumerate()
+            .map(move |(entry, (index, name))| Listed {
+                entry,
+                id: index.id,
+                name: name.name.as_str(),
+                type_id: typed.then_some(name.type_id),
+                kind: typed.then(|| Kind::of(name.type_id)).flatten(),
+                size: index.size,
+            })
     }
 }
 

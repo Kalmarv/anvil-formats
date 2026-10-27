@@ -1,6 +1,12 @@
 //! Fixed-size generic-material fields used by the native shader key setters. The base bitfields serialize
 //! as separate values: blend@21, bits4/5@25/26, eight-bit reference@27, display mode@28, bits16..27@32..43,
 //! bits29/30@44/45. Runtime bit28 is not serialized. These are not the shader define bit positions.
+#![deny(
+    clippy::arithmetic_side_effects,
+    clippy::indexing_slicing,
+    clippy::cast_possible_truncation
+)]
+
 use super::material::{Error, Material};
 use primase_foundations::bytes::{Endian, View};
 
@@ -49,15 +55,21 @@ pub fn read(body: &[u8]) -> Result<MaterialShader, Error> {
             value: format!("blend {blend}, display {display}"),
         });
     }
+    let reference = v.u8(27).map_err(|e| Error::Invalid {
+        what: "shader material alpha reference",
+        value: e.to_string(),
+    })?;
+    // `bit(on, n)`: bit `n` of the flag word, set when `on`.
+    let bit = |on: bool, n: u32| u32::from(on).rotate_left(n);
     let mut flags = blend
-        | u32::from(flag(25)?) << 4
-        | u32::from(flag(26)?) << 5
-        | u32::from(body[27]) << 6
-        | display << 14;
-    for bit in 16..=27 {
-        flags |= u32::from(flag(32 + bit - 16)?) << bit;
+        | bit(flag(25)?, 4)
+        | bit(flag(26)?, 5)
+        | u32::from(reference).rotate_left(6)
+        | display.rotate_left(14);
+    for (at, n) in (32usize..=43).zip(16u32..=27) {
+        flags |= bit(flag(at)?, n);
     }
-    flags |= u32::from(flag(44)?) << 29 | u32::from(flag(45)?) << 30;
+    flags |= bit(flag(44)?, 29) | bit(flag(45)?, 30);
     let mut unsupported = Vec::new();
     for (at, name) in [(310, "video texture"), (320, "multi-texture set")] {
         if flag(at)? {

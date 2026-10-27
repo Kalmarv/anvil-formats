@@ -151,7 +151,7 @@ impl<'a> Reader<'a> {
         }
     }
     fn at(&self) -> usize {
-        self.origin + self.c.position()
+        self.origin.saturating_add(self.c.position())
     }
     fn u32(&mut self, name: &'static str) -> Result<u32> {
         Ok(self.c.u32(LE).field(name)?)
@@ -245,7 +245,7 @@ fn effect(bytes: &[u8], origin: usize, state_only: bool) -> Result<Effect> {
         r.c.array::<6>().field("effect counts")?;
     if reserved != 0 {
         return Err(invalid(
-            origin + 7,
+            origin.saturating_add(7),
             "effect reserved count",
             format!("{reserved}"),
         ));
@@ -256,7 +256,7 @@ fn effect(bytes: &[u8], origin: usize, state_only: bool) -> Result<Effect> {
     let pixel_key = r.u64("pixel cache key")?;
     if r.bytes(16, "effect reserved header")?.iter().any(|&b| b != 0) {
         return Err(invalid(
-            origin + 32,
+            origin.saturating_add(32),
             "effect reserved header",
             "nonzero reserved bytes",
         ));
@@ -328,7 +328,7 @@ pub fn read(bytes: &[u8]) -> Result<Database> {
     }
     let view = View::new(bytes);
     let mut r = Reader::new(
-        view.slice(source_at, table_at - source_at)
+        view.slice(source_at, table_at.saturating_sub(source_at))
             .field("source region")?,
         source_at,
     );
@@ -424,40 +424,53 @@ pub fn read(bytes: &[u8]) -> Result<Database> {
             payload: Payload::Missing,
         });
     }
+    // the first record's payload offset field: its row's 28th byte
+    let first_offset_at = table_at.saturating_add(28);
     let payload_at = records
         .first()
-        .map(|r| size(r.offset, table_at, "first payload offset"))
+        .map(|r| size(r.offset, first_offset_at, "first payload offset"))
         .transpose()?
         .unwrap_or(bytes.len());
     if payload_at < table_end {
-        return Err(invalid(payload_at, "payload region", "overlaps table"));
+        return Err(invalid(
+            first_offset_at,
+            "first payload offset",
+            format!("{payload_at:#x} lies inside the record table, which ends at {table_end:#x}"),
+        ));
     }
     let padding = view
-        .slice(table_end, payload_at - table_end)
+        .slice(table_end, payload_at.saturating_sub(table_end))
         .field("table reserve")?;
     if padding.iter().any(|&b| b != 0) {
         return Err(invalid(table_end, "table reserve", "nonzero bytes"));
     }
     let mut payloads = Reader::new(
-        view.slice(payload_at, bytes.len() - payload_at)
+        view.slice(payload_at, bytes.len().saturating_sub(payload_at))
             .field("payload region")?,
         payload_at,
     );
-    for record in &mut records {
-        if size(record.offset, payloads.at(), "payload offset")? != payloads.at() {
+    for (index, record) in records.iter_mut().enumerate() {
+        // where this record's offset and length fields lie in the table
+        let row = table_at.saturating_add(index.saturating_mul(36));
+        let (offset_at, length_at) = (row.saturating_add(28), row.saturating_add(32));
+        if size(record.offset, offset_at, "payload offset")? != payloads.at() {
             return Err(invalid(
-                payloads.at(),
+                offset_at,
                 "payload offset",
-                format!("stored {:#x}; records must tile in table order", record.offset),
+                format!(
+                    "stored {:#x}; records must tile in table order, this one at {:#x}",
+                    record.offset,
+                    payloads.at()
+                ),
             ));
         }
         let at = payloads.at();
-        let n = size(record.bytes, at, "payload length")?;
+        let n = size(record.bytes, length_at, "payload length")?;
         let data = payloads.bytes(n, "record payload")?;
         record.payload = if n == 0 {
             if record.key.kind != 4 {
                 return Err(invalid(
-                    at,
+                    row,
                     "empty payload",
                     "only effect records may lack compiled data",
                 ));

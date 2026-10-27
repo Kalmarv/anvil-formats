@@ -5,85 +5,94 @@
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
-use crate::reference::{self, Reference};
 
+use crate::fields::{BodyError, LE, body_error, refuse};
+use crate::reference::{self, Reference};
+use primase_foundations::bytes::{Field, View};
+
+/// An AmbianceAndTimeOfDayPreset or a ForecastPreset, as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub enum StoredLook {
+    /// An ambiance and time-of-day preset.
     Ambiance {
+        /// The season's ClassID.
         season: u64,
+        /// The forecast preset it refers to, if any.
         forecast: Option<Reference>,
+        /// The hour of day, in `[0, 24)`.
         hour: f32,
+        /// An angle in degrees, in `[0, 360]`; what it turns is not established.
         angle: f32,
+        /// The byte ending the body, as stored.
         flag: u8,
     },
-    Forecast {
-        values: [f32; 12],
-    },
+    /// A forecast preset: twelve lanes whose roles are not established.
+    Forecast { values: [f32; 12] },
 }
+/// The AmbianceAndTimeOfDayPreset type id.
 pub const AMBIANCE_PRESET: u32 = 0xE8EC_CA01;
+/// The ForecastPreset type id.
 pub const FORECAST_PRESET: u32 = 0x79B0_E782;
 
+/// Why a look preset body can't be read.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("look preset {0}")]
+    Body(#[from] BodyError),
+    #[error("look preset: type {type_id:#010x} with a {length}-byte body is not a profile read here")]
+    Unsupported { type_id: u32, length: usize },
+}
+body_error!(Error, Error::Body);
+
 impl StoredLook {
-    pub fn parse(type_id: u32, body: &[u8]) -> Result<Self, String> {
-        if body.first() != Some(&1) {
-            return Err("look preset: unknown managed header".into());
+    /// The preset a resource of type `type_id` (`AMBIANCE_PRESET` or `FORECAST_PRESET`) holds in `body`.
+    pub fn parse(type_id: u32, body: &[u8]) -> Result<Self, Error> {
+        let v = View::new(body);
+        let managed = v.u8(0).field("managed header")?;
+        if managed != 1 {
+            return Err(refuse("managed header", 0, managed.into(), "1").into());
         }
-        let float = |at: usize| -> Result<f32, String> {
-            let end = at.checked_add(4).ok_or("look preset: scalar offset overflow")?;
-            let value = f32::from_le_bytes(
-                body.get(at..end)
-                    .and_then(|b| b.try_into().ok())
-                    .ok_or("look preset: truncated scalar")?,
-            );
-            if !value.is_finite() {
-                return Err(format!("look preset: nonfinite scalar at {at}"));
+        let float = |at: usize, what: &'static str| -> Result<f32, Error> {
+            let bits = v.u32(at, LE).field(what)?;
+            let value = f32::from_bits(bits);
+            if value.is_finite() {
+                Ok(value)
+            } else {
+                Err(refuse(what, at, bits.into(), "a finite number").into())
             }
-            Ok(value)
         };
         match (type_id, body.len()) {
             (AMBIANCE_PRESET, 29) if body.get(1) == Some(&0) => {
-                let season = u64::from_le_bytes(
-                    body.get(2..10)
-                        .and_then(|b| b.try_into().ok())
-                        .ok_or("look preset: season reference")?,
-                );
-                let forecast = reference::parse(
-                    body.get(10..20)
-                        .and_then(|b| b.try_into().ok())
-                        .ok_or("look preset: forecast reference")?,
-                )
-                .map_err(|e| e.to_string())?;
-                let hour = float(20)?;
-                let angle = float(24)?;
+                let season = v.u64(2, LE).field("season reference")?;
+                let forecast = reference::parse(v.array(10).field("forecast reference")?)
+                    .map_err(|source| BodyError::Reference { at: 10, source })?;
+                let hour = float(20, "hour")?;
+                let angle = float(24, "angle")?;
                 if !(0.0..24.0).contains(&hour) {
-                    return Err(format!("look preset hour {hour} outside [0,24)"));
+                    return Err(refuse("hour", 20, hour.to_bits().into(), "in [0, 24)").into());
                 }
                 if !(0.0..=360.0).contains(&angle) {
-                    return Err(format!("look preset angle {angle} outside [0,360]"));
+                    return Err(refuse("angle", 24, angle.to_bits().into(), "in [0, 360]").into());
                 }
                 Ok(Self::Ambiance {
                     season,
                     forecast,
                     hour,
                     angle,
-                    flag: *body.get(28).ok_or("look preset: missing flag")?,
+                    flag: v.u8(28).field("flag")?,
                 })
             }
             (FORECAST_PRESET, 49) => {
                 let mut values = [0.; 12];
-                for (index, value) in values.iter_mut().enumerate() {
-                    let at = index
-                        .checked_mul(4)
-                        .and_then(|n| n.checked_add(1))
-                        .ok_or("look preset: lane offset overflow")?;
-                    *value = float(at)?;
+                for (value, at) in values.iter_mut().zip((1usize..).step_by(4)) {
+                    *value = float(at, "forecast lane")?;
                 }
                 Ok(Self::Forecast { values })
             }
-            _ => Err(format!(
-                "look preset: unsupported type {type_id:#010x}, {}-byte profile",
-                body.len()
-            )),
+            _ => Err(Error::Unsupported {
+                type_id,
+                length: body.len(),
+            }),
         }
     }
 }

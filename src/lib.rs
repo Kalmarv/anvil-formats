@@ -3,7 +3,7 @@
 //! Written against Riders Republic (Steam build 25394987; `.forge` archives of version 27, zstd-compressed) and
 //! Shaun White Skateboarding (PC, 2010; version 26, LZO2A). The formats were worked out from those games' own files and
 //! checked against them, with third-party readers (AnvilToolkit, ACExplorer, RRAssetStudio) as cross-checks where they
-//! exist; the Engine wiki records the formats: <https://kalmarv.github.io/engine-wiki/engines/anvil/>. Docs here cite
+//! exist (see below); the Engine wiki records the formats: <https://kalmarv.github.io/engine-wiki/engines/anvil/>. Docs here cite
 //! "the Riders Republic survey" for the census those pages are drawn from.
 //!
 //! - **Containers.** A `.forge` archive of version 26 or 27 ([`forge`]): its index, each entry's offset, size and
@@ -22,6 +22,16 @@
 //! - **Shaun White Skateboarding** ([`shaunwhite`]): its scene entities, collision, markers, grind guidance,
 //!   lights and materials as its version-26 forges store them, and its SDB2 shader databases.
 //!
+//! # Third-party tools these docs cite
+//!
+//! "AnvilToolkit" (1.3.x; community tools for several Anvil games, published on Nexus Mods:
+//! <https://www.nexusmods.com/site/mods/455>), "RRAssetStudio" (v3, a Riders Republic asset reader), "ACExplorer" and
+//! "the AC schemas" (Assassin's Creed field layouts bundled with such tools) are other people's programs. None is a
+//! dependency, none is needed to build or test this crate, and none is redistributed here; no stable public
+//! download location is recorded for RRAssetStudio, ACExplorer or the schemas. A doc saying such a tool "reads it so"
+//! or "names it so" states what that tool did when compared with this reader, as a claim of that tool: nothing in this
+//! crate's tests depends on it, and a name or label taken from one is marked as its claim where it is used.
+//!
 //! Every read is checked: a short or malformed body is refused with an error that names the field and its offset,
 //! never a panic. Records keep what the reader doesn't interpret as stored bytes.
 //!
@@ -36,6 +46,15 @@
 #![doc = include_str!("../examples/forge_listing.rs")]
 //! ```
 #![deny(clippy::disallowed_methods, clippy::disallowed_types)]
+// Every reader here works on bytes a file supplies: no unchecked index, no wrapping arithmetic, no truncating cast.
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::arithmetic_side_effects,
+        clippy::indexing_slicing,
+        clippy::cast_possible_truncation
+    )
+)]
 
 pub mod animation;
 pub mod archive;

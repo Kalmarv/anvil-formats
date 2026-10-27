@@ -6,25 +6,35 @@
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
-use crate::archive::{Archive, At};
+use crate::archive::{self, Archive, At};
+use crate::fields::{BodyError, LE, body_error, end, refuse};
+use primase_foundations::bytes::{Cursor, Field};
 
+/// A controller's entries.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Controller {
     pub tracks: Vec<Track>,
 }
 
+/// One animated property: its path, kind, key times and key values.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Track {
+    /// The property path's node ids (CRC-32 of each name).
     pub path: Vec<u32>,
+    /// The track class ([`Controller`] reads float, vector and byte tracks).
     pub kind: u32,
+    /// The key times, strictly increasing.
     pub times: Vec<u16>,
+    /// One value per key; a scalar track fills the first lane.
     pub values: Vec<[f32; 4]>,
     pub path_flags: [u8; 2],
     pub binding: u64,
     pub trailer: [u8; 5],
 }
 
+/// The TimeOfDayPropertyControllerData type id.
 pub const TIME_OF_DAY: u32 = 0xF0C8_5018;
+/// The WeatherPropertyControllerData type id.
 pub const WEATHER: u32 = 0x8870_04DC;
 const ENTRY: u32 = 0x050A_3620;
 const PATH: u32 = 0x3C00_B2E0;
@@ -33,29 +43,66 @@ const FLOAT: u32 = 0xCFD6_6AAD;
 const VECTOR: u32 = 0x8BE9_C203;
 const BYTE: u32 = 0x5841_BD2B;
 
+/// The most entries a controller is read with.
+const MAX_ENTRIES: usize = 8192;
+
+/// Why a controller can't be read, sampled or found.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("controller {0}")]
+    Body(#[from] BodyError),
+    /// A track whose key times and values don't pair up, or that has none.
+    #[error("controller track: {times} key times for {values} values (one or more of each, paired)")]
+    KeyVector { times: usize, values: usize },
+    #[error("controller track: key times are not strictly increasing")]
+    UnorderedKeys,
+    #[error("controller track: the time or the interpolated value is not finite")]
+    NonFinite,
+    /// More than one track ends in the path asked for.
+    #[error("controller: more than one track ends in the property {path}")]
+    Ambiguous { path: String },
+    /// A class that names no look controller.
+    #[error("{class:#x}: not a look controller class (time of day {TIME_OF_DAY:#x}, weather {WEATHER:#x})")]
+    NotAController { class: u32 },
+    /// A resource named for a controller that has another type.
+    #[error("{name}: expected controller {expected:#x}, found type {found:#x}")]
+    WrongType { name: String, expected: u32, found: u32 },
+    /// A look without its time-of-day controller.
+    #[error("{name}: time-of-day controller absent")]
+    Absent { name: String },
+    #[error(transparent)]
+    Archive(#[from] archive::Error),
+}
+body_error!(Error, Error::Body);
+
 impl Track {
+    /// The value at `time`: the first key's before it, the last's after the last, linear between (a byte track holds
+    /// each key's value until the next).
     #[allow(
         clippy::arithmetic_side_effects,
         reason = "finite floating point curve interpolation; no byte addressing"
     )]
-    pub fn at(&self, time: f32) -> Result<[f32; 4], String> {
-        if !time.is_finite() || self.times.is_empty() || self.times.len() != self.values.len() {
-            return Err("controller: invalid sample/key vector".into());
+    pub fn at(&self, time: f32) -> Result<[f32; 4], Error> {
+        let key_vector = || Error::KeyVector {
+            times: self.times.len(),
+            values: self.values.len(),
+        };
+        if !time.is_finite() {
+            return Err(Error::NonFinite);
+        }
+        if self.times.is_empty() || self.times.len() != self.values.len() {
+            return Err(key_vector());
         }
         if self.times.windows(2).any(|pair| matches!(pair, [a,b] if a>=b)) {
-            return Err("controller: unordered key times".into());
+            return Err(Error::UnorderedKeys);
         }
-        let first = self.times.first().copied().ok_or("controller: no first time")?;
+        let first = self.times.first().copied().ok_or_else(key_vector)?;
         if time <= f32::from(first) {
-            return self
-                .values
-                .first()
-                .copied()
-                .ok_or("controller: no first value".into());
+            return self.values.first().copied().ok_or_else(key_vector);
         }
         for (times, values) in self.times.windows(2).zip(self.values.windows(2)) {
             let ([start, end], [a, b]) = (times, values) else {
-                return Err("controller: invalid key pair".into());
+                return Err(key_vector());
             };
             if time <= f32::from(*end) {
                 if self.kind == BYTE {
@@ -67,116 +114,126 @@ impl Track {
                     *out = a * (1.0 - f) + b * f;
                 }
                 if result.iter().any(|v| !v.is_finite()) {
-                    return Err("controller: nonfinite interpolated value".into());
+                    return Err(Error::NonFinite);
                 }
                 return Ok(result);
             }
         }
-        self.values
-            .last()
-            .copied()
-            .ok_or("controller: no last key".into())
+        self.values.last().copied().ok_or_else(key_vector)
     }
 }
-struct Cursor<'a> {
-    bytes: &'a [u8],
-    at: usize,
+
+/// An object header (a u64 id) and its class, which must be `class`.
+fn header(c: &mut Cursor, what: &'static str, class: u32) -> Result<(), Error> {
+    c.take(8).field(what)?;
+    let at = c.position();
+    let found = c.u32(LE).field(what)?;
+    if found != class {
+        return Err(refuse(what, at, found.into(), "the class the profile holds here").into());
+    }
+    Ok(())
 }
-impl<'a> Cursor<'a> {
-    fn take<const N: usize>(&mut self) -> Result<[u8; N], String> {
-        let end = self.at.checked_add(N).ok_or("controller offset overflow")?;
-        let value = self
-            .bytes
-            .get(self.at..end)
-            .and_then(|v| v.try_into().ok())
-            .ok_or_else(|| format!("controller truncated at {} reading {N} bytes", self.at))?;
-        self.at = end;
-        Ok(value)
+
+/// Bytes the grammar fixes, refused at the first one that is not `want`'s.
+fn fixed<const N: usize>(c: &mut Cursor, what: &'static str, want: [u8; N]) -> Result<(), Error> {
+    let at = c.position();
+    let found = c.array::<N>().field(what)?;
+    if let Some((k, (&b, _))) = found.iter().zip(&want).enumerate().find(|(_, (b, w))| b != w) {
+        return Err(refuse(
+            what,
+            at.saturating_add(k),
+            b.into(),
+            "the byte the scalar-path profile fixes here",
+        )
+        .into());
     }
-    fn u32(&mut self) -> Result<u32, String> {
-        Ok(u32::from_le_bytes(self.take()?))
-    }
-    fn header(&mut self, class: u32) -> Result<(), String> {
-        let _id = self.take::<8>()?;
-        let found = self.u32()?;
-        if found != class {
-            return Err(format!(
-                "controller: expected class {class:08x}, found {found:08x} at {}",
-                self.at.saturating_sub(4)
-            ));
-        }
-        Ok(())
-    }
+    Ok(())
 }
+
 impl Controller {
-    pub fn parse(bytes: &[u8]) -> Result<Self, String> {
-        let mut c = Cursor { bytes, at: 0 };
-        if c.take::<1>()? != [1] {
-            return Err("controller: unknown ManagedObject header".into());
-        }
-        let count = usize::try_from(c.u32()?).map_err(|_| "controller: entry count overflow")?;
-        if count > 8192 {
-            return Err("controller: entry count exceeds supported resource bound".into());
-        }
+    /// A controller's body: its entries in registry order, each a scalar property path and a float, vector or byte
+    /// key curve, read to the body's end.
+    pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
+        let mut c = Cursor::new(bytes);
+        fixed(&mut c, "ManagedObject header", [1])?;
+        let at = c.position();
+        let count = c.u32(LE).field("entry count")?;
+        let count = usize::try_from(count)
+            .ok()
+            .filter(|&n| n <= MAX_ENTRIES)
+            .ok_or_else(|| refuse("entry count", at, count.into(), "at most 8192"))?;
         let mut tracks = Vec::with_capacity(count);
         for _ in 0..count {
-            c.header(ENTRY)?;
-            c.header(PATH)?;
-            let nodes = usize::try_from(c.u32()?).map_err(|_| "controller: path node count overflow")?;
-            if !(1..=32).contains(&nodes) {
-                return Err("controller: invalid property path length".into());
-            }
+            header(&mut c, "entry", ENTRY)?;
+            header(&mut c, "property path", PATH)?;
+            let at = c.position();
+            let nodes = c.u32(LE).field("path node count")?;
+            let nodes = usize::try_from(nodes)
+                .ok()
+                .filter(|n| (1..=32).contains(n))
+                .ok_or_else(|| refuse("path node count", at, nodes.into(), "1 to 32"))?;
             let mut path = Vec::with_capacity(nodes);
             for _ in 0..nodes {
-                c.header(NODE)?;
+                header(&mut c, "path node", NODE)?;
                 // Fixed scalar-path node profile; conditioned/indexed/solver nodes need their own grammar.
-                if c.take::<2>()? != [255; 2] || c.take::<8>()? != [0; 8] || c.take::<3>()? != [1, 0, 0] {
+                fixed(&mut c, "path node conditions", [255; 2])?;
+                fixed(&mut c, "path node conditions", [0; 8])?;
+                fixed(&mut c, "path node flags", [1, 0, 0])?;
+                path.push(c.u32(LE).field("path node id")?);
+                fixed(&mut c, "path node index fields", [0; 25])?;
+                fixed(&mut c, "path node solver", [3])?;
+            }
+            let path_flags = c.array().field("path flags")?;
+            let binding = c.u64(LE).field("binding")?;
+            c.take(8).field("track id")?;
+            let at = c.position();
+            let kind = c.u32(LE).field("track class")?;
+            let width = match kind {
+                FLOAT | BYTE => 1,
+                VECTOR => 4,
+                _ => {
                     return Err(
-                        "controller: conditioned/indexed PropertyPathNode is not the scalar-path profile"
-                            .into(),
+                        refuse("track class", at, kind.into(), "a float, vector or byte track").into(),
                     );
                 }
-                path.push(c.u32()?);
-                if c.take::<25>()? != [0; 25] || c.take::<1>()? != [3] {
-                    return Err("controller: PropertyPathNode solver/index fields differ from the established profile".into());
-                }
-            }
-            let path_flags = c.take()?;
-            let binding = u64::from_le_bytes(c.take()?);
-            let _track_id = c.take::<8>()?;
-            let kind = c.u32()?;
-            let width = match kind {
-                FLOAT => 1,
-                VECTOR => 4,
-                BYTE => 1,
-                _ => return Err(format!("controller: unsupported track class {kind:08x}")),
             };
-            let packed = c.u32()?;
-            let keys = usize::try_from(packed & 65535).map_err(|_| "controller: key count overflow")?;
+            let at = c.position();
+            let packed = c.u32(LE).field("key count and first time")?;
+            let keys = usize::from(u16::try_from(packed & 0xFFFF).unwrap_or(u16::MAX));
             if !(1..=4096).contains(&keys) {
-                return Err("controller: invalid key count".into());
+                return Err(refuse("key count", at, (packed & 0xFFFF).into(), "1 to 4096").into());
             }
             let mut times = Vec::with_capacity(keys);
-            times.push(u16::try_from(packed >> 16).map_err(|_| "controller: first time overflow")?);
+            times.push(u16::try_from(packed >> 16).unwrap_or(u16::MAX));
+            let times_at = c.position();
             for _ in 1..keys {
-                times.push(u16::from_le_bytes(c.take()?));
+                times.push(c.u16(LE).field("key time")?);
             }
-            if times.windows(2).any(|p| matches!(p,[a,b] if a>=b)) {
-                return Err("controller: key times are not strictly increasing".into());
+            if let Some(k) = times.windows(2).position(|p| matches!(p, [a, b] if a >= b)) {
+                let found = times.get(k.saturating_add(1)).copied().unwrap_or(0);
+                return Err(refuse(
+                    "key time",
+                    times_at.saturating_add(k.saturating_mul(2)),
+                    found.into(),
+                    "above the key before it",
+                )
+                .into());
             }
             let mut values = Vec::with_capacity(keys);
             for _ in 0..keys {
                 let mut value = [0.0; 4];
                 for lane in value.iter_mut().take(width) {
+                    let at = c.position();
                     *lane = if kind == BYTE {
-                        let [byte] = c.take::<1>()?;
-                        f32::from(byte)
+                        f32::from(c.u8().field("key value")?)
                     } else {
-                        f32::from_bits(c.u32()?)
+                        let bits = c.u32(LE).field("key value")?;
+                        let lane = f32::from_bits(bits);
+                        if !lane.is_finite() {
+                            return Err(refuse("key value", at, bits.into(), "a finite number").into());
+                        }
+                        lane
                     };
-                    if !lane.is_finite() {
-                        return Err("controller: non-finite key".into());
-                    }
                 }
                 values.push(value);
             }
@@ -187,20 +244,15 @@ impl Controller {
                 values,
                 path_flags,
                 binding,
-                trailer: c.take()?,
+                trailer: c.array().field("track trailer")?,
             });
         }
-        if c.at != bytes.len() {
-            return Err(format!(
-                "controller: {} trailing bytes",
-                bytes.len().saturating_sub(c.at)
-            ));
-        }
+        end(&c)?;
         Ok(Self { tracks })
     }
     /// Match the complete suffix, rejecting duplicate candidates instead of choosing a fog/sky property by its
     /// final name alone (several cloud and fog objects each have Albedo and Density).
-    pub fn value(&self, path: &[&str], time: f32) -> Result<Option<[f32; 4]>, String> {
+    pub fn value(&self, path: &[&str], time: f32) -> Result<Option<[f32; 4]>, Error> {
         let ids: Vec<_> = path
             .iter()
             .map(|s| primase_foundations::hash::crc32(s.as_bytes()))
@@ -208,7 +260,7 @@ impl Controller {
         let mut matches = self.tracks.iter().filter(|t| t.path.ends_with(&ids));
         let value = matches.next().map(|t| t.at(time)).transpose()?;
         if matches.next().is_some() {
-            return Err(format!("controller: ambiguous property {}", path.join("/")));
+            return Err(Error::Ambiguous { path: path.join("/") });
         }
         Ok(value)
     }
@@ -247,25 +299,27 @@ pub struct LookControllers {
 /// weather one (`WEA_<look>`, when a forge holds it). Only the class of each resource is checked, and the
 /// controller's own parse states what it can hold. The error is the reason; an absent time-of-day controller is one,
 /// an absent weather controller is not.
-pub fn look_controllers(archive: &mut Archive, look: &str) -> Result<LookControllers, String> {
-    let read = |archive: &mut Archive, class: u32| -> Result<Option<Controller>, String> {
+pub fn look_controllers(archive: &mut Archive, look: &str) -> Result<LookControllers, Error> {
+    let read = |archive: &mut Archive, class: u32| -> Result<Option<Controller>, Error> {
         let Some(name) = controller_name(class, look) else {
-            return Err(format!("{class:#x}: not a look controller class"));
+            return Err(Error::NotAController { class });
         };
         let Some(at) = named_resource(archive, &name) else {
             return Ok(None);
         };
-        let resource = archive.resource(at).map_err(|error| error.to_string())?;
+        let resource = archive.resource(at)?;
         if resource.type_id != class {
-            return Err(format!(
-                "{name}: expected controller {class:#x}, found {:#x}",
-                resource.type_id
-            ));
+            return Err(Error::WrongType {
+                name,
+                expected: class,
+                found: resource.type_id,
+            });
         }
         Controller::parse(&resource.body).map(Some)
     };
-    let time_of_day =
-        read(archive, TIME_OF_DAY)?.ok_or_else(|| format!("TOD_{look}: time-of-day controller absent"))?;
+    let time_of_day = read(archive, TIME_OF_DAY)?.ok_or_else(|| Error::Absent {
+        name: format!("TOD_{look}"),
+    })?;
     let weather = read(archive, WEATHER)?;
     Ok(LookControllers { time_of_day, weather })
 }

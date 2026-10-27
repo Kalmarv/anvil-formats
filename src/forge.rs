@@ -359,6 +359,12 @@ impl Forge {
         self.header.version
     }
 
+    /// Whether the name records state a type id: version 27's do; the field of version 26 is 0 on every record read
+    /// (33 forges of the one game), so it names no type and [`NameRecord::type_id`] is not one there.
+    pub fn stores_type_ids(&self) -> bool {
+        self.header.version != 26
+    }
+
     /// Entry `k`'s payload bytes as stored (its index record's size of them, at its offset; in version 26 after its
     /// FILEDATA header, which is checked against the entry's records), from the forge `r` this index was read from;
     /// [`crate::data::read_entry`] reads its blocks.

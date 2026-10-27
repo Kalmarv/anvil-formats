@@ -127,3 +127,19 @@ pub(crate) fn end(c: &Cursor) -> Result<(), BodyError> {
         left => Err(BodyError::Trailing(left)),
     }
 }
+
+/// A value the grammar bounds, found at `at` and refused: what it is, where it is, the number found (a float's bits,
+/// a length) and what the grammar reads there.
+pub(crate) fn refuse(what: &'static str, at: usize, found: u64, read: &'static str) -> BodyError {
+    BodyError::Value {
+        what,
+        at,
+        found,
+        read,
+    }
+}
+
+/// A body of `found` bytes where the grammar fixes its length: the refusal at the body's first byte.
+pub(crate) fn length(what: &'static str, found: usize, read: &'static str) -> BodyError {
+    refuse(what, 0, u64::try_from(found).unwrap_or(u64::MAX), read)
+}
