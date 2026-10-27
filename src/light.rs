@@ -14,13 +14,17 @@ use primase_foundations::bytes::{Field, View};
 pub struct StoredSpotLight {
     /// The LightColor's four lanes (red, green, blue, alpha).
     pub color: [f32; 4],
+    /// The stored intensity (f32 at offset 54), finite and not negative; its unit is not interpreted.
     pub intensity: f32,
+    /// The stored luminance (f32 at offset 58), finite and not negative; its unit is not interpreted.
     pub luminance: f32,
     /// The cone's inner angle, radians.
     pub inner: f32,
     /// The cone's outer angle, radians (at most pi).
     pub outer: f32,
+    /// The light's range (f32 at offset 320), finite and above zero; its unit is not interpreted.
     pub range: f32,
+    /// The near distance (f32 at offset 324), finite and not negative.
     pub near: f32,
 }
 /// The SpotLight component's type id.
@@ -34,6 +38,7 @@ const INSTANCE_LENGTH: usize = 311;
 /// Why a SpotLight or LightInstance body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body has the wrong length, a wrong LightColor class, or a float that is negative or not finite; the inner error names the field and offset.
     #[error("light {0}")]
     Body(#[from] BodyError),
 }

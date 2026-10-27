@@ -13,18 +13,25 @@ use primase_foundations::bytes::{Cursor, Field};
 /// A GIDynResource's one volume, as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredGiDyn {
+    /// The u64 after the managed header byte: the id of the world the volume belongs to.
     pub world_id: u64,
+    /// The u32 after the world id: the id of the cell the volume belongs to.
     pub cell_id: u32,
     /// The PositionOffset the probe positions are relative to.
     pub position: [f32; 3],
+    /// The sample count (u32): the first stream decodes to 5 u16 words per sample, 10 bytes.
     pub samples: u32,
+    /// The probe count (u32): the fourth stream holds one 8-byte vector per probe.
     pub probes: u32,
+    /// The `IsIndoor` flag; stored as a byte that must be 0 or 1.
     pub indoor: bool,
     /// The one box's low and high voxel corners.
     pub voxel_bounds: [[i32; 3]; 2],
+    /// The u32 stored after the box's corners, as stored.
     pub subvolume_word: u32,
     /// The four encoded streams, as stored.
     pub streams: [Vec<u8>; 4],
+    /// The three u32 sizes after the streams: decoded bytes of the sample stream (10 per sample), of the second ("V2") stream (at least 24 per probe plus an 8-byte header), and of the grid stream (2 per voxel of the box).
     pub decoded_bytes: [u32; 3],
 }
 
@@ -38,6 +45,7 @@ const BOX: u32 = 0xE96B_B4A2;
 /// Why a GIDynResource body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, outside the one-volume, one-box profile, or a stream does not decode to the sizes its footer states; the inner error names the field and offset.
     #[error("GIDynResource {0}")]
     Body(#[from] BodyError),
 }

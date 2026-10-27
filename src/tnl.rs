@@ -31,6 +31,7 @@ pub const TNL_CHUNK: u32 = 0x4A05_4F51;
 /// Why a node layer or chunk body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short or fails one of the layout's checks (first byte, repeated item count, chunk length, `0xFEED` magic, tag); the inner error names the field and offset.
     #[error("terrain {0}")]
     Body(#[from] BodyError),
 }
@@ -52,10 +53,12 @@ pub struct LayerItem {
 /// A TerrainNodeLayer body as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredNodeLayer {
+    /// The layer's items in stored order, one per node.
     pub items: Vec<LayerItem>,
 }
 
 impl StoredNodeLayer {
+    /// Reads a TerrainNodeLayer body to its last byte; refuses a first byte other than `01`, a nonzero byte inside an item, a repeated count that differs from the first, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredNodeLayer, Error> {
         let mut c = Cursor::new(body);
         let at = c.position();
@@ -117,11 +120,13 @@ pub fn position(level: u32, row: u32, column: u32) -> Option<u32> {
 /// A TNLChunk body as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredTnlChunk {
+    /// The u16 after the `0xFEED` magic: `0x1C14` for a node with children, `0x9C14` for a leaf (any other value is refused).
     pub tag: u16,
     /// The nine blocks, in stored order.
     pub blocks: [Vec<u8>; 9],
     /// The node's height range, as fractions of the terrain's.
     pub a: f32,
+    /// The second height-range fraction, the f32 after `a`.
     pub b: f32,
     /// The set of the node's material values (block 2's), one bit each.
     pub mask: [u8; 32],
@@ -130,6 +135,7 @@ pub struct StoredTnlChunk {
 }
 
 impl StoredTnlChunk {
+    /// Reads a TNLChunk body to its last byte; refuses a wrong first byte, a stored length that is not the body's length less 5, a missing `0xFEED` magic, a tag other than `0x1C14` or `0x9C14`, a block running past the body, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredTnlChunk, Error> {
         let mut c = Cursor::new(body);
         let first = c.array::<1>().field("first byte")?;

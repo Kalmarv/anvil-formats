@@ -23,6 +23,7 @@ pub const START_KIND: &str = "start";
 /// One row of the start-position table: a name that contains `needle` marks where something starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StartName {
+    /// The substring searched for in an Entity's name.
     pub needle: &'static str,
     /// Names of level 01 that the row maps.
     pub examples: &'static str,

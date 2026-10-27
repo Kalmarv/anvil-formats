@@ -27,7 +27,10 @@ pub enum StoredLook {
         flag: u8,
     },
     /// A forecast preset: twelve lanes whose roles are not established.
-    Forecast { values: [f32; 12] },
+    Forecast {
+        /// The twelve f32 lanes at offsets 1 to 48, finite; their roles are not established.
+        values: [f32; 12],
+    },
 }
 /// The AmbianceAndTimeOfDayPreset type id.
 pub const AMBIANCE_PRESET: u32 = 0xE8EC_CA01;
@@ -37,10 +40,17 @@ pub const FORECAST_PRESET: u32 = 0x79B0_E782;
 /// Why a look preset body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short or fails one of the preset's checks (managed header, hour or angle range); the inner error names the field and offset.
     #[error("look preset {0}")]
     Body(#[from] BodyError),
+    /// The body's type id and length is none of the two profiles read: an AmbianceAndTimeOfDayPreset of 29 bytes or a ForecastPreset of 49 bytes.
     #[error("look preset: type {type_id:#010x} with a {length}-byte body is not a profile read here")]
-    Unsupported { type_id: u32, length: usize },
+    Unsupported {
+        /// The type id that was passed.
+        type_id: u32,
+        /// The body's length in bytes.
+        length: usize,
+    },
 }
 body_error!(Error, Error::Body);
 

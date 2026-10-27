@@ -24,12 +24,29 @@ const ENVELOPE: usize = 5 + 13;
 /// Why a CompiledMip body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body ends before a field (flag, image length, image, zero byte, parent or level) is complete.
     #[error("CompiledMip body: {0}")]
     Short(#[from] FieldError),
+    /// A byte that must have one fixed value does not: the flag at offset 0 must be 1 and the byte after the image 0.
     #[error("CompiledMip {what}: {found}, only {read} is read (another value isn't established)")]
-    Value { what: &'static str, found: u8, read: u8 },
+    Value {
+        /// The field that was refused.
+        what: &'static str,
+        /// The byte found.
+        found: u8,
+        /// The only byte value this reader accepts there.
+        read: u8,
+    },
+    /// The body's length is not the stored image length plus the 18 bytes around the image.
     #[error("CompiledMip body: {have} bytes, but its image of {image} bytes closes it at {closes}")]
-    Closure { image: u32, closes: usize, have: usize },
+    Closure {
+        /// The image length stored in the body, in bytes.
+        image: u32,
+        /// The body length that image length implies: the image plus 18 bytes of envelope.
+        closes: usize,
+        /// The body's actual length.
+        have: usize,
+    },
 }
 
 /// A CompiledMip body as stored.

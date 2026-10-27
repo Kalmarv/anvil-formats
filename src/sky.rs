@@ -14,6 +14,7 @@ use primase_foundations::bytes::{Cursor, Field, View};
 pub struct SkyKeyframe {
     /// The hour of day, in `[0, 24)`.
     pub hour: f32,
+    /// The keyframe's CRC as stored (u32 at offset 17 of the keyframe).
     pub crc: u32,
     /// 65,536 texels of four half floats.
     pub inscatter: Vec<u8>,
@@ -30,13 +31,21 @@ pub struct SkyKeyframe {
 /// A LayeredSky's sun settings and keyframes, as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredSky {
+    /// The sun position mode (u32 at offset 12), as stored; what its values select is not interpreted.
     pub sun_position_mode: u32,
+    /// The sun azimuth (f32 at offset 16), as stored.
     pub sun_azimuth: f32,
+    /// The sun tilt (f32 at offset 20), as stored.
     pub sun_tilt: f32,
+    /// The sun elevation (f32 at offset 24), as stored.
     pub sun_elevation: f32,
+    /// The sun colour (four f32 at offsets 48 to 63), as stored.
     pub sun_color: [f32; 4],
+    /// The sun intensity (f32 at offset 64), as stored.
     pub sun_intensity: f32,
+    /// The three Mie phase settings (f32), as stored: at offsets 350, 354 and 358 in the 24-keyframe profile and 340, 344 and 348 in the one-keyframe profile.
     pub mie: [f32; 3],
+    /// The keyframes in stored order, one one per authored time of day (24 in the 3,442,710-byte profile, 1 in the 143,994-byte one).
     pub keyframes: Vec<SkyKeyframe>,
 }
 /// The LayeredSky type id.
@@ -51,22 +60,36 @@ const AMBIANCE_LENGTH: usize = 5277;
 /// Why a sky body can't be read or sampled.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, has an unestablished length, or fails one of the layout's checks; the inner error names the field and offset.
     #[error("sky {0}")]
     Body(#[from] BodyError),
     /// Sampling needs a finite hour and at least one keyframe.
     #[error(
         "sky: radiance needs a finite hour and at least one keyframe (hour {hour}, {keyframes} keyframes)"
     )]
-    NoKeyframes { hour: f32, keyframes: usize },
+    NoKeyframes {
+        /// The hour that was asked for.
+        hour: f32,
+        /// How many keyframes the sky holds.
+        keyframes: usize,
+    },
+    /// The direction passed to sampling has a non-finite component or is the zero vector.
     #[error("sky: a direction must be finite and not zero")]
     Direction,
+    /// The Mie phase settings are not finite, an asymmetry is outside (-1, 1) or the mix is outside [0, 1].
     #[error(
         "sky: Mie phase settings must be finite, the two asymmetries inside (-1, 1) and the mix in [0, 1]"
     )]
     Mie,
     /// The scattering table is shorter than its sampling reads.
     #[error("sky: the scattering table has no texel at byte {at} ({length} bytes)")]
-    Texel { at: usize, length: usize },
+    Texel {
+        /// The byte offset that was read.
+        at: usize,
+        /// The table's length in bytes.
+        length: usize,
+    },
+    /// Sampling produced a radiance that is not finite.
     #[error("sky: the radiance is not finite")]
     NonFinite,
 }

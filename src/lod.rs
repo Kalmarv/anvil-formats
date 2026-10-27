@@ -37,16 +37,23 @@ pub const LEVELS: usize = 5;
 /// Why a LODSelector body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body ends before a field is complete.
     #[error("LODSelector body: {0}")]
     Short(#[from] FieldError),
+    /// A field that must have one fixed value (first byte `1`, level marker, dependency tag `0`, repeated dependency count) does not, or the dependency count does not match the leading levels without a reference ([`StoredLodSelector::level_ids`]).
     #[error("LODSelector {what}: {found}, only {read} is read")]
     Value {
+        /// The field that was refused.
         what: &'static str,
+        /// The value found, widened to `u64`.
         found: u64,
+        /// The value this reader accepts there, in words.
         read: &'static str,
     },
+    /// A level's 10-byte reference is neither the present form (tag `01`) nor the empty form (tag `03`).
     #[error("LODSelector level reference: {0}")]
     Reference(#[source] crate::reference::Error),
+    /// Bytes remain after the last field; the count is how many.
     #[error("LODSelector body: {0} bytes after its end")]
     Trailing(usize),
 }
@@ -56,6 +63,7 @@ pub enum Error {
 pub struct StoredLevel {
     /// Its first u64 (on both fixtures the selector's ClassID + 13 + the level's index; meaning not established).
     pub head: u64,
+    /// The level's 10-byte reference, or `None` if stored as the empty form; leading levels without one take the selector's dependencies in order.
     pub reference: Option<Reference>,
     /// The three f32 after the reference, as stored: `SwitchDistance`, `TransitionZoneSize` and
     /// `FadeTimeMultiplier`.
@@ -78,6 +86,7 @@ pub struct StoredLodSelector {
     pub head: u32,
     /// The 7 bytes after it.
     pub head_rest: [u8; 7],
+    /// The five levels ([`LEVELS`]), in stored order.
     pub levels: Vec<StoredLevel>,
     /// The dependencies' ClassIDs (Meshes on every fixture), in order.
     pub dependencies: Vec<u64>,

@@ -39,6 +39,7 @@ pub const DDECAL_MODEL: u32 = 0x5056_3D58;
 /// Why a deferred decal body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, malformed or has bytes left over; the inner error names the field and offset.
     #[error("deferred decal {0}")]
     Body(#[from] BodyError),
 }
@@ -87,8 +88,11 @@ impl StoredDecal {
 /// One DDecalStaticInstancers item: its object id, its 3 bytes (the first its model's index), its records.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredDecalItem {
+    /// The DDecalStaticInstancers object's id.
     pub id: u64,
+    /// The three bytes after the object header, as stored; the first is the item's model ([`StoredDecalItem::model`]).
     pub bytes: [u8; 3],
+    /// The item's 100-byte decal records, in stored order.
     pub decals: Vec<StoredDecal>,
 }
 
@@ -102,20 +106,28 @@ impl StoredDecalItem {
 /// A HoudiniDecalInstancerComponent body as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredDeferredDecals {
+    /// The first 212 bytes of the component, as stored.
     pub head: Vec<u8>,
+    /// The id of the StaticDDecalLibrary object.
     pub library: u64,
+    /// The DDecalModel references, in stored order; an item's model indexes this list.
     pub models: Vec<Option<Reference>>,
+    /// The decal items, in stored order.
     pub items: Vec<StoredDecalItem>,
+    /// The last 46 bytes of the component, as stored.
     pub tail: Vec<u8>,
 }
 
 /// A DDecalModel body as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredDecalModel {
+    /// The byte after the leading `01`, as stored.
     pub byte: u8,
     /// Its Diffuse, Normal, Height and Mask1 maps.
     pub textures: [Option<Reference>; 4],
+    /// The 20 flag bytes after the textures, as stored.
     pub flags: [u8; 20],
+    /// The 53 bytes of parameters after the flags, as stored; the opacity is the f32 at offset 10 ([`StoredDecalModel::opacity`]).
     pub parameters: Vec<u8>,
 }
 

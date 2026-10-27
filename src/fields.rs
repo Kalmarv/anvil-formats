@@ -21,14 +21,21 @@ pub enum BodyError {
     /// A value the grammar fixes, or bounds, is another.
     #[error("{what}: {found:#x} at {at}, not {read}")]
     Value {
+        /// The field that was refused (for example `"top card count"`).
         what: &'static str,
+        /// The byte offset in the body where the field starts.
         at: usize,
+        /// The value found, widened to `u64`; for a float field, its bit pattern, for a length error, the length.
         found: u64,
+        /// What the grammar reads there, in words (for example `"0 or 1"`).
         read: &'static str,
     },
+    /// An embedded 10-byte reference that [`reference::parse`] refused; `at` is the body offset of the reference.
     #[error("reference at {at}: {source}")]
     Reference {
+        /// The body offset of the reference's first byte.
         at: usize,
+        /// Why the reference was refused.
         #[source]
         source: reference::Error,
     },

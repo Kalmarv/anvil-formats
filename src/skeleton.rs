@@ -69,22 +69,29 @@ pub struct StoredBone {
 /// One SkeletonPose: a f32 and its bones.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredPose {
+    /// The SkeletonPose object's id.
     pub id: u64,
+    /// The f32 stored after the object header; its meaning is not established.
     pub value: f32,
+    /// The pose's SkeletonPoseBones, in stored order.
     pub bones: Vec<StoredPoseBone>,
 }
 
 /// One SkeletonPoseBone: its object's id and its 16 bytes as stored (no field list of the registry describes them).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredPoseBone {
+    /// The SkeletonPoseBone object's id.
     pub id: u64,
+    /// The 16 bytes after the object header, as stored.
     pub bytes: [u8; 16],
 }
 
 /// One SkeletonPoseGroup: its poses.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredPoseGroup {
+    /// The SkeletonPoseGroup object's id.
     pub id: u64,
+    /// The group's poses, in stored order.
     pub poses: Vec<StoredPose>,
 }
 
@@ -93,6 +100,7 @@ pub struct StoredPoseGroup {
 pub struct StoredSkeleton {
     /// `9C78EB24`, an enum.
     pub kind: u32,
+    /// The skeleton's bones, in stored order.
     pub bones: Vec<StoredBone>,
     /// `4E1F230B`: the root bone's id.
     pub root: Option<u64>,
@@ -102,6 +110,7 @@ pub struct StoredSkeleton {
     pub rotation: [f32; 4],
     /// The BodyPartMapping the skeleton names (its ClassID).
     pub body_part_mapping: Option<u64>,
+    /// The pose groups, in stored order.
     pub pose_groups: Vec<StoredPoseGroup>,
     /// The IKData object's id where the skeleton has one (the class stores no field).
     pub ik_data: Option<u64>,
@@ -129,6 +138,7 @@ const REFLEX3_CONSTRAINTS: u32 = 0x8E3F_B47A;
 /// Why a Skeleton body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, malformed or has bytes left over; the inner error names the field and offset.
     #[error("skeleton {0}")]
     Body(#[from] BodyError),
 }

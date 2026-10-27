@@ -24,6 +24,7 @@ use primase_foundations::bytes::{Cursor, Field};
 pub struct WaterPatch {
     /// Its object's u64 and type, as stored.
     pub id: u64,
+    /// The patch object's u32 type, as stored.
     pub kind: u32,
     /// x and y in metres, z the water level.
     pub position: [f32; 3],
@@ -31,6 +32,7 @@ pub struct WaterPatch {
     pub unread: [u8; 4],
     /// u0, v0, u1, v1 in the atlases.
     pub rect: [f32; 4],
+    /// The patch's level (u32 at offset 45); its square has side `512 >> level` metres, see [`WaterPatch::side`].
     pub level: u32,
 }
 
@@ -47,6 +49,7 @@ pub const WATER_COMPONENT: u32 = 0x996D_F94F;
 /// Why a WaterComponent body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, malformed or has bytes left over; the inner error names the field and offset.
     #[error("WaterComponent {0}")]
     Body(#[from] BodyError),
 }
@@ -59,6 +62,7 @@ pub struct StoredWater {
     pub mesh: Option<Reference>,
     /// The byte before the patches (1 on the survey's lakes), as stored.
     pub byte: u8,
+    /// The WaterPatchDescs, in stored order.
     pub patches: Vec<WaterPatch>,
     /// Flow, Params and LocalProfile.
     pub atlases: [Option<Reference>; 3],

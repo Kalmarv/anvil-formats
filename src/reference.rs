@@ -17,8 +17,10 @@ pub const LENGTH: usize = 10;
 /// Why a reference can't be read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    /// The first byte was this value; only `1` (a reference) and `3` (none) are read.
     #[error("reference tag {0}: only 1 and 3 are read")]
     Tag(u8),
+    /// The first byte was `3` (no reference) but one of the nine bytes after it is not zero.
     #[error("reference tagged 3 (none) with nonzero bytes after it")]
     NonZero,
 }
@@ -26,7 +28,9 @@ pub enum Error {
 /// A reference to a resource (tag `01`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Reference {
+    /// The byte after the `01` tag, kept as stored (1 on every entry read); what it selects is not established.
     pub mode: u8,
+    /// The little-endian `u64` ClassID of the referred resource, bytes 2 to 9 of the reference.
     pub id: u64,
 }
 

@@ -54,18 +54,37 @@ pub struct RigBone {
 /// order it stores them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredRig {
+    /// The bones in assembly order: the main Skeleton's first, then each addon Skeleton's new bones in stored order.
     pub bones: Vec<RigBone>,
 }
 
 /// Why Skeletons can't be joined into a rig.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    /// A bone's parent pointer names a bone id the same Skeleton does not hold; `skeleton` is its index in the list given to `assemble`, `bone` the bone's name hash and `parent` the missing id.
     #[error("skeleton {skeleton}: bone {bone:08x} names a parent {parent:#x} that the skeleton doesn't hold")]
-    Parent { skeleton: usize, bone: u32, parent: u64 },
+    Parent {
+        /// The Skeleton's position in the list given to `assemble`.
+        skeleton: usize,
+        /// The name hash of the bone holding the pointer.
+        bone: u32,
+        /// The parent id that no bone of that Skeleton has.
+        parent: u64,
+    },
+    /// A Skeleton holds two bones with the same name hash `bone`; `skeleton` is its index in the list given.
     #[error("skeleton {skeleton}: two bones named {bone:08x}")]
-    Duplicate { skeleton: usize, bone: u32 },
+    Duplicate {
+        /// The Skeleton's position in the list given to `assemble`.
+        skeleton: usize,
+        /// The repeated name hash.
+        bone: u32,
+    },
+    /// The bone with name hash `bone` is its own ancestor through the parent pointers.
     #[error("the bone {bone:08x} is its own ancestor")]
-    Cycle { bone: u32 },
+    Cycle {
+        /// The name hash of a bone on the cycle.
+        bone: u32,
+    },
 }
 
 impl StoredRig {

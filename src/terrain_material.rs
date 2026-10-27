@@ -46,6 +46,7 @@ const INDEX_AT: usize = 198;
 /// Why a bank or material can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, malformed or has bytes left over; the inner error names the field and offset.
     #[error("terrain material {0}")]
     Body(#[from] BodyError),
 }
@@ -54,14 +55,18 @@ body_error!(Error, Error::Body);
 /// A TerrainMaterialBank as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredMaterialBank {
+    /// References to the bank's detail TextureSets, in stored order; each must be present (tag `01`).
     pub details: Vec<Reference>,
     /// The TerrainMaterials, in the order a material raster's values index them.
     pub materials: Vec<Reference>,
+    /// References to the region objects, in stored order; each must be present.
     pub regions: Vec<Reference>,
+    /// The single reference after the region list (a TextureMap), or `None` if stored as the empty form.
     pub last: Option<Reference>,
 }
 
 impl StoredMaterialBank {
+    /// Reads a TerrainMaterialBank body to its last byte; refuses a first byte other than `01`, a list entry stored as the empty reference, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredMaterialBank, Error> {
         let mut c = Cursor::new(body);
         let [first] = c.array::<1>().field("first byte")?;
@@ -88,6 +93,7 @@ impl StoredMaterialBank {
 /// A TerrainMaterial as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredTerrainMaterial {
+    /// The whole 202-byte body, as stored.
     pub bytes: Vec<u8>,
     /// The f32 at 2: the detail's uv scale.
     pub uv_scale: f32,
@@ -95,11 +101,14 @@ pub struct StoredTerrainMaterial {
     pub f32_6: f32,
     /// The u64 at 17, its TextureSet's id (`None` where 0).
     pub texture_set: Option<u64>,
+    /// The CollisionMaterial reference at offset 180, or `None` if stored as the empty form.
     pub collision_material: Option<Reference>,
+    /// The u32 at offset 198: the material's position in the bank.
     pub index: u32,
 }
 
 impl StoredTerrainMaterial {
+    /// Reads a TerrainMaterial body; refuses any length other than 202 bytes.
     pub fn parse(body: &[u8]) -> Result<StoredTerrainMaterial, Error> {
         if body.len() != MATERIAL_BYTES {
             return Err(BodyError::Value {
