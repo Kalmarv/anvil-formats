@@ -13,6 +13,7 @@ use primase_foundations::bytes::{Cursor, Field};
 /// A controller's entries.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Controller {
+    /// The animated properties, in stored order.
     pub tracks: Vec<Track>,
 }
 
@@ -27,8 +28,11 @@ pub struct Track {
     pub times: Vec<u16>,
     /// One value per key; a scalar track fills the first lane.
     pub values: Vec<[f32; 4]>,
+    /// The two bytes after the path's nodes, as stored.
     pub path_flags: [u8; 2],
+    /// The u64 after the path flags, as stored; what it binds is not interpreted.
     pub binding: u64,
+    /// The five bytes ending the track, as stored.
     pub trailer: [u8; 5],
 }
 
@@ -49,27 +53,52 @@ const MAX_ENTRIES: usize = 8192;
 /// Why a controller can't be read, sampled or found.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, outside the scalar-path profile this reader reads, or has bytes left over; the inner error names the field and offset.
     #[error("controller {0}")]
     Body(#[from] BodyError),
     /// A track whose key times and values don't pair up, or that has none.
     #[error("controller track: {times} key times for {values} values (one or more of each, paired)")]
-    KeyVector { times: usize, values: usize },
+    KeyVector {
+        /// How many key times the track has.
+        times: usize,
+        /// How many key values it has.
+        values: usize,
+    },
+    /// A track's key times do not strictly increase.
     #[error("controller track: key times are not strictly increasing")]
     UnorderedKeys,
+    /// The time asked for, or the interpolated value, is not finite.
     #[error("controller track: the time or the interpolated value is not finite")]
     NonFinite,
     /// More than one track ends in the path asked for.
     #[error("controller: more than one track ends in the property {path}")]
-    Ambiguous { path: String },
+    Ambiguous {
+        /// The path asked for, joined with `/`.
+        path: String,
+    },
     /// A class that names no look controller.
     #[error("{class:#x}: not a look controller class (time of day {TIME_OF_DAY:#x}, weather {WEATHER:#x})")]
-    NotAController { class: u32 },
+    NotAController {
+        /// The class given.
+        class: u32,
+    },
     /// A resource named for a controller that has another type.
     #[error("{name}: expected controller {expected:#x}, found type {found:#x}")]
-    WrongType { name: String, expected: u32, found: u32 },
+    WrongType {
+        /// The entry's name.
+        name: String,
+        /// The controller type id that was expected.
+        expected: u32,
+        /// The type id the entry has.
+        found: u32,
+    },
     /// A look without its time-of-day controller.
     #[error("{name}: time-of-day controller absent")]
-    Absent { name: String },
+    Absent {
+        /// The entry name that was looked for.
+        name: String,
+    },
+    /// Reading the controller entry from the archive failed.
     #[error(transparent)]
     Archive(#[from] archive::Error),
 }
@@ -291,7 +320,9 @@ pub fn named_resource(archive: &Archive, name: &str) -> Option<At> {
 /// forges need not hold.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LookControllers {
+    /// The look's time-of-day controller, the entry named `TOD_` and the look's name.
     pub time_of_day: Controller,
+    /// The look's weather controller (`WEA_` and the look's name), or `None` if the archive has no such entry.
     pub weather: Option<Controller>,
 }
 
