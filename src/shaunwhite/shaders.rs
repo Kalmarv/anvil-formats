@@ -25,16 +25,22 @@ const LE: Endian = Endian::Little;
 /// The shader stage a stored program is for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Stage {
+    /// The vertex stage.
     Vertex,
+    /// The pixel stage.
     Pixel,
 }
 
 /// A source file with its original line endings, CRC-32 and 128-bit dependency identity.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Source {
+    /// The source's name, from its 64-byte field up to the first NUL.
     pub name: String,
+    /// The CRC-32 stored after the name.
     pub crc32: u32,
+    /// The source's four dependency words, as stored.
     pub dependency: [u32; 4],
+    /// The source text, as stored.
     pub bytes: Vec<u8>,
 }
 
@@ -42,8 +48,11 @@ pub struct Source {
 /// The low six permutation bits select the template; the remaining bits are that template's defines.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Key {
+    /// The row's kind (u32).
     pub kind: u32,
+    /// The two u32 permutation words, low word first, as one u64.
     pub permutation: u64,
+    /// The row's four dependency-mask words, as stored.
     pub dependencies: [u32; 4],
 }
 
@@ -51,7 +60,9 @@ pub struct Key {
 /// No destination render-state interpretation is made here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct State {
+    /// The render-state kind (u32), a D3D9 state code as stored.
     pub kind: u32,
+    /// The state's value (u32), as stored.
     pub value: u32,
 }
 
@@ -59,9 +70,13 @@ pub struct State {
 /// In the shipped PC databases the packed address is `0x00800000 | pixel_sampler_slot`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SamplerBinding {
+    /// The sampler's name.
     pub sampler: String,
+    /// The texture variable's name.
     pub texture: String,
+    /// The packed native address word, as stored.
     pub address: u32,
+    /// The sampler's (kind, value) state pairs, in stored order.
     pub states: Vec<State>,
 }
 
@@ -71,14 +86,17 @@ pub struct Effect {
     /// Raw SM3 vertex and pixel programs, as stored (not checked to be complete programs). A state-only record has
     /// neither.
     pub vertex: Option<Vec<u8>>,
+    /// The raw pixel program, as stored; `None` for a record with no pixel program.
     pub pixel: Option<Vec<u8>>,
     /// Native per-stage cache identities, as stored. Their hash algorithm is not inferred.
     pub vertex_key: u64,
+    /// The pixel stage's cache identity, as stored.
     pub pixel_key: u64,
     /// Assignments made on pass entry.
     pub states: Vec<State>,
     /// States saved on entry and restored on exit. Values here are the stored initial placeholders, not assignments.
     pub restore_states: Vec<State>,
+    /// The first group of sampler bindings, in stored order.
     pub samplers: Vec<SamplerBinding>,
     /// The header's second sampler-binding group, encoded identically. Empty in the shipped PC databases.
     pub additional_samplers: Vec<SamplerBinding>,
@@ -90,43 +108,59 @@ pub struct Effect {
 pub enum Payload {
     /// A retained key with no compiled data. This is not a zero-byte shader.
     Missing,
+    /// A compiled pass: both programs, render states, sampler bindings and state-variable names.
     Effect(Effect),
     /// Raw utility stage (kinds 5..7). Stage meaning follows the token version, not a guess from its role.
     Program {
+        /// The stage the program's token version names.
         stage: Stage,
+        /// The program's bytes, as stored.
         bytes: Vec<u8>,
     },
 }
 
+/// One row of the table with its payload.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record {
+    /// The row's key.
     pub key: Key,
     /// File offset, including zero-length entries' positions.
     pub offset: u32,
+    /// The payload's size in bytes (u32), as stored.
     pub bytes: u32,
+    /// The payload, read according to the row's kind.
     pub payload: Payload,
 }
 
 /// An uncompressed version-39 SDB2, in source/table order. No quality level is chosen by the reader.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Database {
+    /// The sources, in stored order.
     pub sources: Vec<Source>,
+    /// The records, in table order.
     pub records: Vec<Record>,
     /// The zeroed reserve between the active record table and the first payload, in bytes.
     pub table_padding: usize,
 }
 
+/// Why an SDB2 database can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The database ends before a field is complete.
     #[error("{0}")]
     Field(#[from] FieldError),
+    /// A field has a value the format does not allow (a wrong magic or version, sizes that do not tile, a name that is not UTF-8, or bytes left over).
     #[error("SDB2 {field} at {at:#x}: {why}")]
     Invalid {
+        /// The byte offset in the database.
         at: usize,
+        /// The field that was refused.
         field: &'static str,
+        /// What is wrong with it.
         why: String,
     },
 }
+/// A result with this module's [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 fn invalid(at: usize, field: &'static str, why: impl Into<String>) -> Error {
     Error::Invalid {

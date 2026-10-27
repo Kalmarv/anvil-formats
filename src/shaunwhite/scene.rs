@@ -20,11 +20,17 @@ use primase_foundations::bytes::{Field, FieldError, View};
 
 const LE: primase_foundations::bytes::Endian = primase_foundations::bytes::Endian::Little;
 
+/// The class id of an Entity (the CRC-32 of `Entity`).
 pub const ENTITY: u32 = 0x0984_415E;
+/// The class id of a Visual component.
 pub const VISUAL: u32 = 0xEC65_8D29;
+/// The class id of the inline ResourceRef that starts every component and names a Visual's object.
 pub const RESOURCE_REF: u32 = 0x3C6C_77C8;
+/// The class id of a LODSelector.
 pub const LOD_SELECTOR: u32 = 0x51DC_6B80;
+/// The class id of one of a LODSelector's five LODDescriptors.
 pub const LOD_DESCRIPTOR: u32 = 0xA360_319A;
+/// The class id of a GridCellDataBlock, the list of what a level cell holds.
 pub const GRID_CELL_DATA_BLOCK: u32 = 0xAC2B_BF68;
 /// The class of a spawn node's component (`0xF63C9D7F`; the name `SpawnPoint` is the class's in later games of the
 /// engine family, where the hash is named: this game's data does not name it).
@@ -43,16 +49,23 @@ pub const MULTI_POINT_PLAYER_SPAWNER: u32 = 0x5D54_B379;
 /// hull (`0xC3120087`: a GraphicObject holding u16 indices, an octagonal prism's 16 positions, its edge normals and
 /// plane equations; every `00_SHP_FF*` entity shows one next to its Mesh, so it is the deformation volume).
 pub const PARTICLE_SYSTEM: u32 = 0xCAAA_7EE8;
+/// The class id of a DynamicMesh.
 pub const DYNAMIC_MESH: u32 = 0xF4BB_BB9E;
+/// The class id of a RealTreeMesh.
 pub const REAL_TREE_MESH: u32 = 0xCD0D_35E6;
+/// The class id of the shaping mechanic's free-form shape hull.
 pub const FREE_FORM_SHAPE_HULL: u32 = 0xC312_0087;
 
+/// Why an Entity or LODSelector body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body ends before a field is complete.
     #[error("{0}")]
     Short(#[from] FieldError),
+    /// The class id after the managed byte and id is not [`ENTITY`].
     #[error("entity body: class {0:#x}, not Entity")]
     NotEntity(u32),
+    /// The world matrix holds a non-finite float.
     #[error("a non-finite world matrix")]
     Matrix,
 }
@@ -60,16 +73,20 @@ pub enum Error {
 /// A Visual component: its ResourceRef's kind byte and the object it shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Visual {
+    /// The kind byte of the Visual's ResourceRef, as stored.
     pub kind: u8,
+    /// The id of the object the Visual shows: a Mesh, a LODSelector, a light or one of the other classes listed above.
     pub target: u32,
 }
 
 /// An Entity as read (the module documentation).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Entity {
+    /// The Entity object's id (u32 at offset 1).
     pub id: u32,
     /// GlobalMatrix, row by row (row vectors).
     pub matrix: [f32; 16],
+    /// The Visual components found, in order of appearance.
     pub visuals: Vec<Visual>,
     /// The classes of its components, in order of appearance (the module documentation).
     pub components: Vec<u32>,

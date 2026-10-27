@@ -91,21 +91,33 @@ pub const BODY_LEN: usize = 647;
 /// Why a Material body is not read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body ends before a field is complete.
     #[error("{0}")]
     Field(#[from] FieldError),
+    /// The class id after the managed byte and id is not [`MATERIAL`].
     #[error("material body: class {0:#x}, not Material")]
     NotMaterial(u32),
+    /// The body is not [`BODY_LEN`] bytes.
     #[error("material body is {0} bytes, not {BODY_LEN}")]
     Length(usize),
+    /// A field has a value the format does not allow (a TexMapMode above 2, or a non-finite layer value).
     #[error("{what}: {value}")]
-    Invalid { what: &'static str, value: String },
+    Invalid {
+        /// The field that was refused.
+        what: &'static str,
+        /// The value found, formatted.
+        value: String,
+    },
 }
 
 /// A texture slot of a Material: which one, where its id is stored and whether four layer floats follow it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SlotSpec {
+    /// The slot's name, as in the module documentation's table.
     pub name: &'static str,
+    /// The offset in the body of the slot's TextureMapSpec id (a u32).
     pub at: usize,
+    /// Whether the slot carries five layer floats (scale u, scale v, offset u, offset v, rotation) and two TexMapMode words after its id.
     pub layer: bool,
 }
 
@@ -177,7 +189,9 @@ pub const READ_SLOTS: [&str; 7] = [
 /// One slot that holds a spec: the TextureMapSpec's id and, for a layer slot, the UV transform it states.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Slot {
+    /// The slot's name ([`SlotSpec::name`]).
     pub name: &'static str,
+    /// The TextureMapSpec's id (a nonzero u32); the spec's last u32 is the TextureMap's id.
     pub spec: u32,
     /// Scale u, scale v; (1, 1) for a slot without layer floats.
     pub scale: [f32; 2],
@@ -185,13 +199,16 @@ pub struct Slot {
     pub offset: [f32; 2],
     /// Rotation about the UV origin in degrees, before scale and offset (native UV setter).
     pub rotation: f32,
+    /// The UV channel (0 or 1) of the slots `mask`, `diffuse_b` and `diffuse_c`; 0 for every other slot.
     pub texcoord: u8,
+    /// The two TexMapMode words of a layer slot (0 wrap, 1 clamp, 2 border), or `None` for a slot without layer floats.
     pub address: Option<[u32; 2]>,
 }
 
 /// The fields of a Material (the module documentation).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Material {
+    /// The Material object's id (u32).
     pub id: u32,
     /// The byte at 21.
     pub blend: u8,
@@ -217,6 +234,7 @@ pub struct Material {
     pub specular_power: f32,
     /// The normal slot's `HeightScale` at 265.
     pub normal_scale: f32,
+    /// The layer tints and texture-alpha switches.
     pub layering: LayerState,
     /// The slots that hold a spec id, in body order.
     pub slots: Vec<Slot>,
