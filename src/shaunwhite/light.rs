@@ -12,49 +12,77 @@ use primase_foundations::bytes::{Cursor, Endian, Field, FieldError};
 /// The source flare, as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LightFlare {
+    /// The LightFlare object's id.
     pub id: u32,
+    /// Whether the flare is enabled.
     pub enabled: bool,
+    /// The flare texture's id, as stored.
     pub texture: u32,
     /// Width, height, occlusion width, occlusion height, intensity.
     pub values: [f32; 5],
+    /// The flare's `scale` flag.
     pub scale: bool,
+    /// The flare's `fade` flag.
     pub fade: bool,
+    /// The flare's offset (f32), as stored.
     pub offset: f32,
+    /// The flare's blend mode (u32), as stored.
     pub blend: u32,
 }
 
 /// A light's authored shape. Spot angles are stored radians; source range falloff has a near and a far distance.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LightShape {
+    /// An omni light.
     Point {
+        /// The near distance of the range falloff, at least zero.
         near: f32,
+        /// The far distance, above `near`.
         far: f32,
     },
+    /// A spot light.
     Spot {
+        /// The inner cone angle (`LittleAlpha`), radians, not above `outer`.
         inner: f32,
+        /// The outer cone angle (`BigAlpha`), radians, at most pi/2.
         outer: f32,
+        /// The cookie texture's id (u32), as stored.
         cookie: u32,
+        /// A u32 whose meaning is not established, as stored.
         unknown: u32,
+        /// The near distance of the range falloff, at least zero.
         near: f32,
+        /// The far distance, above `near`.
         far: f32,
     },
+    /// A directional or sun light.
     Directional,
 }
 
 /// Source light data before its uncalibrated intensity/colour and spot axis are interpreted by a chosen pass.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LightSource {
+    /// The light object's id.
     pub id: u32,
+    /// The light's class id: one of [`OMNI_LIGHT`], [`SPOT_LIGHT`], [`DIRECTIONAL_LIGHT`] or [`SUN_LIGHT`].
     pub class: u32,
+    /// The light's category (u32), as stored.
     pub category: u32,
+    /// Whether the light is flagged as generated.
     pub generated: bool,
+    /// The id of the embedded colour object.
     pub colour_id: u32,
+    /// The colour's four f32 lanes, none negative.
     pub colour: [f32; 4],
     /// Dynamic, cast shadows, affect characters, affect environment, dirty.
     pub flags: [bool; 5],
+    /// The intensity, not negative; its unit is not interpreted.
     pub intensity: f32,
+    /// The light's flare.
     pub flare: LightFlare,
+    /// The shadow resolution (u32), as stored.
     pub shadow_resolution: u32,
+    /// The light's shape and the values specific to it.
     pub shape: LightShape,
 }
 
@@ -64,35 +92,60 @@ pub struct LightSource {
 /// scene's ambient light.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkySettings {
+    /// The SkyLight object's id.
     pub id: u32,
+    /// The sun vector (three f32), not all zero.
     pub direction: [f32; 3],
+    /// The id of the sun colour object.
     pub sun_colour_id: u32,
+    /// The sun colour as one u32, as stored.
     pub sun_colour: u32,
+    /// The sun intensity; it equals the inline sun light's intensity.
     pub sun_intensity: f32,
+    /// Two f32 whose meaning is not established, as stored.
     pub unknown_scalars: [f32; 2],
+    /// Whether characters are lit by the character sun colour.
     pub use_character_sun: bool,
+    /// The id of the character sun colour object.
     pub character_colour_id: u32,
+    /// The character sun colour as one u32, as stored.
     pub character_colour: u32,
+    /// The character sun intensity, as stored.
     pub character_intensity: f32,
+    /// Three f32 whose meaning is not established, as stored.
     pub unknown_vector: [f32; 3],
+    /// The ambient colour (four f32 lanes), as stored.
     pub ambient_colour: [f32; 4],
     /// Native property hash 0xea0e031c.
     pub unknown_colour: [f32; 4],
 }
 
 const LE: Endian = Endian::Little;
+/// The class id of an omni light.
 pub const OMNI_LIGHT: u32 = 0x3447_80D6;
+/// The class id of a spot light.
 pub const SPOT_LIGHT: u32 = 0x8032_0FB8;
+/// The class id of a directional light.
 pub const DIRECTIONAL_LIGHT: u32 = 0x7E15_FD50;
+/// The class id of a sun light, the directional light inline in a SkyLight.
 pub const SUN_LIGHT: u32 = 0x5EDC_3E04;
+/// The class id of a SkyLight.
 pub const SKY_LIGHT: u32 = 0x77EE_EBB4;
 
+/// Why a light object can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The object ends before a field is complete.
     #[error(transparent)]
     Field(#[from] FieldError),
+    /// A field has a value the format does not allow (a wrong class id, a negative or non-finite value, a range or cone out of order, or bytes left over); `field` names it.
     #[error("light {field}: {why}")]
-    Invalid { field: &'static str, why: String },
+    Invalid {
+        /// The field that was refused.
+        field: &'static str,
+        /// What is wrong with it.
+        why: String,
+    },
 }
 fn invalid(field: &'static str, why: impl Into<String>) -> Error {
     Error::Invalid {
@@ -140,6 +193,7 @@ fn finish(c: &Cursor<'_>) -> Result<(), Error> {
         Err(invalid("object end", format!("{} trailing bytes", c.remaining())))
     }
 }
+/// Whether `class` is one of the four light classes ([`OMNI_LIGHT`], [`SPOT_LIGHT`], [`DIRECTIONAL_LIGHT`], [`SUN_LIGHT`]).
 pub fn is_light(class: u32) -> bool {
     matches!(class, OMNI_LIGHT | SPOT_LIGHT | DIRECTIONAL_LIGHT | SUN_LIGHT)
 }
