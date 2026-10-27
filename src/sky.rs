@@ -304,9 +304,7 @@ impl SkyKeyframe {
     /// values; the weather/time controllers, clouds, moon, Milky Way, exposure and stars are separate engine inputs.
     #[allow(
         clippy::arithmetic_side_effects,
-        clippy::indexing_slicing,
-        clippy::cast_possible_truncation,
-        reason = "numeric 32x32x16 sampling stencil: coordinates clamped to fixed arrays; byte accesses use checked ranges below"
+        reason = "floating point shading of the sampled table; the table's texels are addressed in `inscatter_sample`"
     )]
     pub fn radiance(&self, direction: [f32; 3], sun: [f32; 3], mie: [f32; 3]) -> Result<[f32; 3], Error> {
         let normalize = |v: [f32; 3]| -> Result<[f32; 3], Error> {
@@ -343,44 +341,8 @@ impl SkyKeyframe {
             0.001047 * distance + 0.015625,
             (cosine + 1.0) * 0.46875 + 0.03125,
         ];
-        let sizes = [32usize, 32, 16];
-        let coordinates = std::array::from_fn::<_, 3, _>(|axis| {
-            let value = (uvw[axis] * sizes[axis] as f32 - 0.5).clamp(0.0, (sizes[axis] - 1) as f32);
-            (value.floor() as usize, value - value.floor())
-        });
-        let mut encoded = [0.0f32; 4];
-        for z in 0..2 {
-            for y in 0..2 {
-                for x in 0..2 {
-                    let offsets = [x, y, z];
-                    let weight: f32 = (0..3)
-                        .map(|a| {
-                            if offsets[a] == 0 {
-                                1.0 - coordinates[a].1
-                            } else {
-                                coordinates[a].1
-                            }
-                        })
-                        .product();
-                    let p =
-                        std::array::from_fn::<_, 3, _>(|a| (coordinates[a].0 + offsets[a]).min(sizes[a] - 1));
-                    let at = ((p[2] * 32 + p[1]) * 32 + p[0]) * 8;
-                    for (lane, value) in encoded.iter_mut().enumerate() {
-                        let texel = at + lane * 2;
-                        let pair = self
-                            .inscatter
-                            .get(texel..texel + 2)
-                            .and_then(|b| b.try_into().ok())
-                            .ok_or(Error::Texel {
-                                at: texel,
-                                length: self.inscatter.len(),
-                            })?;
-                        *value += half(u16::from_le_bytes(pair)) * weight;
-                    }
-                }
-            }
-        }
-        let decoded = encoded.map(|value| value.powi(4));
+        let encoded = self.inscatter_sample(uvw)?;
+        let [r, g, b, mie_red] = encoded.map(|value| value.powi(4));
         let pi = std::f32::consts::PI;
         let rayleigh = 3.0 / (16.0 * pi) * (1.0 + cosine * cosine);
         let phase = |g: f32| {
@@ -388,16 +350,60 @@ impl SkyKeyframe {
                 / ((2.0 + g * g) * (1.0 + g * g - 2.0 * g * cosine).powf(1.5))
         };
         let mie_phase = phase(mie[0]) * (1.0 - mie[2]) + phase(mie[1]) * mie[2];
-        let ratio = [1.0, 0.4296, 0.1752];
-        let result = std::array::from_fn(|lane| {
-            decoded[lane] * rayleigh
-                + decoded[lane] * decoded[3] / decoded[0].max(0.0001) * ratio[lane] * mie_phase
-        });
+        let red = r.max(0.0001);
+        let result = [(r, 1.0), (g, 0.4296), (b, 0.1752)]
+            .map(|(lane, ratio)| lane * rayleigh + lane * mie_red / red * ratio * mie_phase);
         if result.iter().any(|v| !v.is_finite()) {
             return Err(Error::NonFinite);
         }
         Ok(result)
     }
+
+    /// The four half-float lanes of the inscatter table (32 x 32 x 16 texels, x fastest) at texture coordinates
+    /// `uvw`, trilinearly filtered with clamped edges, as `radiance` samples it.
+    #[allow(
+        clippy::arithmetic_side_effects,
+        reason = "floating point filter weights; texel addresses are computed with checked integer arithmetic"
+    )]
+    fn inscatter_sample(&self, uvw: [f32; 3]) -> Result<[f32; 4], Error> {
+        const SIZES: [u16; 3] = [32, 32, 16];
+        let [(x0, fx), (y0, fy), (z0, fz)] = [(uvw[0], SIZES[0]), (uvw[1], SIZES[1]), (uvw[2], SIZES[2])]
+            .map(|(u, size)| cell(u * f32::from(size) - 0.5, size));
+        let mut encoded = [0.0f32; 4];
+        for (z, wz) in [(z0, 1.0 - fz), (z0.saturating_add(1).min(SIZES[2] - 1), fz)] {
+            for (y, wy) in [(y0, 1.0 - fy), (y0.saturating_add(1).min(SIZES[1] - 1), fy)] {
+                for (x, wx) in [(x0, 1.0 - fx), (x0.saturating_add(1).min(SIZES[0] - 1), fx)] {
+                    let weight = wx * wy * wz;
+                    let texel = usize::from(z)
+                        .checked_mul(32)
+                        .and_then(|v| v.checked_add(usize::from(y)))
+                        .and_then(|v| v.checked_mul(32))
+                        .and_then(|v| v.checked_add(usize::from(x)))
+                        .and_then(|v| v.checked_mul(8));
+                    for (lane, value) in (0usize..).step_by(2).zip(encoded.iter_mut()) {
+                        let at = texel.and_then(|t| t.checked_add(lane));
+                        let pair = at
+                            .and_then(|at| self.inscatter.get(at..at.checked_add(2)?))
+                            .and_then(|b| b.try_into().ok())
+                            .ok_or(Error::Texel {
+                                at: at.unwrap_or(usize::MAX),
+                                length: self.inscatter.len(),
+                            })?;
+                        *value += half(u16::from_le_bytes(pair)) * weight;
+                    }
+                }
+            }
+        }
+        Ok(encoded)
+    }
+}
+
+/// The cell a sampling coordinate falls in along an axis of `size` texels, clamped to the table, and the fraction
+/// of the way to the next cell.
+fn cell(value: f32, size: u16) -> (u16, f32) {
+    let value = value.clamp(0.0, f32::from(size.saturating_sub(1)));
+    let index = (0..size).rev().find(|&i| f32::from(i) <= value).unwrap_or(0);
+    (index, value - f32::from(index))
 }
 
 /// WorldAmbiance's managed references at registry-established offsets. No byte scan for coincidental ClassIDs.
@@ -428,6 +434,47 @@ pub fn ambiance(body: &[u8]) -> Result<(u64, u64), Error> {
 )]
 mod tests {
     use super::*;
+
+    /// Radiance over a pseudo-random table, for directions that reach every edge of it, is what the original
+    /// clamped-array stencil gave, bit for bit (pinned as a digest of its 4,000 results).
+    #[test]
+    fn radiance_matches_the_reference_stencil() {
+        let mut state = 0x1234_5678u32;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state
+        };
+        // finite positive half floats (exponent 1 to 29)
+        let inscatter = (0..65_536 * 4)
+            .flat_map(|_| {
+                let bits = (next() % 0x7400 + 0x0400) as u16;
+                bits.to_le_bytes()
+            })
+            .collect();
+        let key = SkyKeyframe {
+            hour: 12.0,
+            crc: 0,
+            inscatter,
+            optical_depth: vec![],
+            irradiance: vec![],
+            sun_depth: vec![],
+            sun_irradiance: vec![],
+        };
+        let mut unit = || (next() % 20_001) as f32 / 10_000.0 - 1.0;
+        let mut digest = 0xcbf2_9ce4_8422_2325u64;
+        for _ in 0..4000 {
+            let direction = [unit(), unit(), unit()];
+            let sun = [unit(), unit(), unit()];
+            let mie = [unit() * 0.9, unit() * 0.9, (unit() + 1.0) / 2.0];
+            for bits in key.radiance(direction, sun, mie).unwrap().map(f32::to_bits) {
+                digest = (digest ^ u64::from(bits)).wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+        assert_eq!(digest, 0xe1db_3276_3132_318d);
+    }
+
     #[test]
     fn half_values_preserve_hdr_and_sign_and_bad_radiance_inputs_are_refused() {
         assert_eq!(half(0x3c00), 1.0);

@@ -151,7 +151,7 @@ pub enum Error {
     #[error("TextureMap body: {0}")]
     Short(#[from] FieldError),
     /// A value that must be fixed is another (first byte `1`, the compiled header's marker and flag, a
-    /// reference tag `0`, or a dimension outside 1 to 3).
+    /// reference tag `0`).
     #[error("TextureMap {what}: {found}, only {read} is read")]
     Value {
         /// The field refused.
@@ -160,6 +160,12 @@ pub enum Error {
         found: u64,
         /// The value this reader accepts there.
         read: u64,
+    },
+    /// The dimension (the u32 at 21) is not 1 (flat), 2 (cube) or 3 (volume).
+    #[error("TextureMap u32 at 21 (dimension): {found}, expected 1 (flat), 2 (cube) or 3 (volume)")]
+    Dimension {
+        /// The value found.
+        found: u32,
     },
     /// A field repeated in the compiled header differs from the same field in the head.
     #[error("TextureMap compiled header: {what} {found}, the header's {stored}")]
@@ -240,11 +246,7 @@ impl StoredTextureMap {
         let format = c.u32(LE).field("format")?;
         let dimension = c.u32(LE).field("u32 at 21")?;
         if !(1..=3).contains(&dimension) {
-            return Err(Error::Value {
-                what: "u32 at 21 (dimension)",
-                found: u64::from(dimension),
-                read: 1,
-            });
+            return Err(Error::Dimension { found: dimension });
         }
         let field_25 = c.u32(LE).field("u32 at 25")?;
         let mip_count = c.u32(LE).field("mip count")?;
@@ -406,6 +408,22 @@ fn only(c: &mut Cursor, what: &'static str, read: u32) -> Result<(), Error> {
 )]
 mod tests {
     use super::*;
+
+    /// A dimension outside 1 to 3 is refused saying which values are read.
+    #[test]
+    fn a_dimension_outside_one_to_three_is_refused_naming_the_three() {
+        let mut body = vec![1u8];
+        for field in [4u32, 4, 1, 1, 0, 4] {
+            body.extend(field.to_le_bytes());
+        }
+        let err = StoredTextureMap::parse(&body).unwrap_err();
+        assert!(matches!(err, Error::Dimension { found: 4 }), "{err:?}");
+        assert!(
+            err.to_string()
+                .contains("expected 1 (flat), 2 (cube) or 3 (volume)"),
+            "{err}"
+        );
+    }
 
     /// A body of these fields, references and pixels.
     fn body(w: u32, h: u32, format: u32, mips: u32, refs: &[u64], pixels: &[u8]) -> Vec<u8> {
