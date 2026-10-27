@@ -1,4 +1,5 @@
-//! A MeshShape resource's body as a run of sections, each kept as stored; nothing in it is interpreted (no geometry).
+//! A MeshShape resource's body as a run of sections, each kept as stored; only the triangle geometry and the tail's
+//! surface table are read out of them ([`MeshShape::geometry`], [`MeshShape::surfaces`]).
 //!
 //! The body (little-endian; offsets from the body's start, after the resource's class id and extension):
 //! - a prefix: a byte (1), a byte (0, 0x21 or 0x3F, kept as stored), three zero bytes, the section run's length
@@ -41,29 +42,60 @@ pub const SECTION_HEADER: usize = 8;
 /// Why a MeshShape body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body ends before a field (prefix, section header) is complete.
     #[error("MeshShape body: {0}")]
     Short(#[from] FieldError),
+    /// A prefix byte is not what is read: the first must be 1, the second 0, 0x21 or 0x3F, and the three after it 0.
     #[error("MeshShape prefix: byte {found} at {at}, not {read}")]
     Prefix {
+        /// The byte's offset in the body.
         at: usize,
+        /// The byte found.
         found: u8,
+        /// The value or values read there, in words.
         read: &'static str,
     },
+    /// The tail does not parse as [`MeshShape::surfaces`] expects; the string says what is wrong.
     #[error("MeshShape tail: {0}")]
     Tail(String),
+    /// The section run's stored length reaches past the end of the body.
     #[error("MeshShape section run: {length} bytes from {PREFIX} past the body's {body} bytes")]
-    Run { length: u32, body: usize },
+    Run {
+        /// The run length stored in the prefix (u32 at offset 5).
+        length: u32,
+        /// The body's length in bytes.
+        body: usize,
+    },
+    /// A section's marker is not `0xECD7`.
     #[error("MeshShape section {index} at {at}: marker {marker:#06x}, not 0xECD7")]
-    Marker { index: usize, at: usize, marker: u16 },
+    Marker {
+        /// The section's position in the run.
+        index: usize,
+        /// The section's offset in the body.
+        at: usize,
+        /// The marker found.
+        marker: u16,
+    },
+    /// A section's size is negative, under its 8-byte header or reaches past the section run.
     #[error("MeshShape section {index} at {at}: size {size}: {why}")]
     Size {
+        /// The section's position in the run.
         index: usize,
+        /// The section's offset in the body.
         at: usize,
+        /// The size stored (i32).
         size: i32,
+        /// Which check failed.
         why: &'static str,
     },
+    /// A geometry section is missing, repeated, of the wrong length or inconsistent with the counts, an index is out of range, or an edge's faces are not the faces naming it; `kind` is the section type and `why` says what.
     #[error("MeshShape geometry: section {kind:#06x}: {why}")]
-    Geometry { kind: u16, why: String },
+    Geometry {
+        /// The section type.
+        kind: u16,
+        /// What is wrong.
+        why: String,
+    },
 }
 
 /// The counts section.
@@ -82,6 +114,7 @@ pub const NO_FACE: u16 = 0xFFFF;
 /// A MeshShape's triangle geometry as stored (in its own units and frame).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Geometry {
+    /// The vertex positions (three f32 each), in stored order; their unit and frame are not established.
     pub positions: Vec<[f32; 3]>,
     /// Each face's three position indices.
     pub faces: Vec<[u16; 3]>,
@@ -103,6 +136,7 @@ impl Geometry {
 pub struct Section {
     /// Where its header starts in the body.
     pub at: usize,
+    /// The section's type (u16): for example [`COUNTS`] or [`POSITIONS`].
     pub kind: u16,
     /// Its size as stored (header included).
     pub size: u32,
@@ -117,6 +151,7 @@ pub struct MeshShape {
     pub second: u8,
     /// The section run's length as stored.
     pub run_length: u32,
+    /// The sections of the run, in stored order.
     pub sections: Vec<Section>,
     /// The bytes after the run, as stored.
     pub tail: Vec<u8>,
@@ -226,9 +261,6 @@ impl MeshShape {
         Ok(&one.bytes)
     }
 
-    /// Its triangle geometry as stored: each section's length exact for its count, every index in range, and each
-    /// edge's face ids the faces that name it (two for an edge between faces, one and [`NO_FACE`] for a boundary
-    /// edge). Nothing is converted: positions are as stored, in the shape's own units and frame.
     /// The tail read: a u16, a u32 count that is 0 or the face count and that many bytes (each face's index into the
     /// references), a u32 count and that many references ([`crate::reference`]), and eight f32, ending the
     /// tail. Every MeshShape of Riders Republic reads so in the census, its face bytes each below the reference count
@@ -285,6 +317,9 @@ impl MeshShape {
         })
     }
 
+    /// Its triangle geometry as stored: each section's length exact for its count, every index in range, and each
+    /// edge's face ids the faces that name it (two for an edge between faces, one and [`NO_FACE`] for a boundary
+    /// edge). Nothing is converted: positions are as stored, in the shape's own units and frame.
     pub fn geometry(&self) -> Result<Geometry, Error> {
         let bad = |kind: u16, why: String| Error::Geometry { kind, why };
         let counts = self.section(COUNTS)?;

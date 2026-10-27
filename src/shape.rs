@@ -38,6 +38,7 @@ pub const REFERENCE_LIST_SHAPE: u32 = 0x2D67_5BA2;
 /// Why a shape body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, has a changed fixed word, a child count that disagrees with the matrix or vector count, or bytes left over; the inner error names the field and offset.
     #[error("shape {0}")]
     Body(#[from] BodyError),
 }
@@ -46,12 +47,16 @@ body_error!(Error, Error::Body);
 /// A SphereShape as stored.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StoredSphere {
+    /// The sphere's centre (vec4); the fourth lane is as stored.
     pub centre: [f32; 4],
+    /// The sphere's radius.
     pub radius: f32,
+    /// The CollisionMaterial reference, or `None` if stored as the empty form.
     pub material: Option<Reference>,
 }
 
 impl StoredSphere {
+    /// Reads a SphereShape body (35 bytes) to its last byte; refuses a first byte other than `01`, a nonzero word after it, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredSphere, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "first byte", 1, 1)?;
@@ -69,13 +74,18 @@ impl StoredSphere {
 /// A CapsuleShape as stored.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StoredCapsule {
+    /// End A of the segment the capsule sweeps (vec4); the fourth lane is as stored.
     pub a: [f32; 4],
+    /// End B of the segment (vec4); the fourth lane is as stored.
     pub b: [f32; 4],
+    /// The radius swept around the segment A-B.
     pub radius: f32,
+    /// The CollisionMaterial reference, or `None` if stored as the empty form.
     pub material: Option<Reference>,
 }
 
 impl StoredCapsule {
+    /// Reads a CapsuleShape body (51 bytes) to its last byte; refuses a first byte other than `01`, a nonzero word after it, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredCapsule, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "first byte", 1, 1)?;
@@ -96,13 +106,16 @@ impl StoredCapsule {
 pub struct StoredBox {
     /// The byte after the first, as stored (0 or 0x21).
     pub byte: u8,
+    /// The box's half extents along its own axes (vec4); the fourth lane is as stored.
     pub half_extents: [f32; 4],
     /// Column-major.
     pub matrix: [f32; 16],
+    /// The CollisionMaterial reference, or `None` if stored as the empty form.
     pub material: Option<Reference>,
 }
 
 impl StoredBox {
+    /// Reads a BoxShape body (95 bytes) to its last byte; refuses a first byte other than `01`, nonzero bytes in the three after the second, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredBox, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "first byte", 1, 1)?;
@@ -124,16 +137,20 @@ impl StoredBox {
 /// A ReferenceListShape as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredReferenceList {
+    /// The child shapes' references, in stored order; each must be present.
     pub children: Vec<Reference>,
     /// Each child's transform, column-major.
     pub matrices: Vec<[f32; 16]>,
     /// The vec4 array, as stored.
     pub vectors: Vec<[f32; 4]>,
+    /// The minimum corner of the children's box (vec4), as stored; it is not checked against the children.
     pub min: [f32; 4],
+    /// The maximum corner of the children's box (vec4), as stored; it is not checked against the children.
     pub max: [f32; 4],
 }
 
 impl StoredReferenceList {
+    /// Reads a ReferenceListShape body to its last byte; refuses an empty child reference, a matrix or vector count that is not the child count, a nonzero word after the first byte, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredReferenceList, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "first byte", 1, 1)?;
