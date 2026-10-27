@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 `Archive::open` reads only the index and name tables, so listing a 15 GB forge takes the time of its index. A Riders Republic forge's entries carry a type id, which the listing names as a `Kind` where this crate has a reader for it. A Shaun White Skateboarding forge's name records carry no type id, so its entries are listed with `Listed::type_id` and `kind` both `None`; read them with `forge::Forge::payload`, `data::read_entry` and `objects::read_objects` (see [`shaunwhite`](src/shaunwhite/mod.rs)).
 
-To use it before it is on crates.io, depend on the repository: `anvil-formats = { git = "https://github.com/Kalmarv/anvil-formats" }`. It needs Rust 1.99 or newer.
+Add it with `cargo add anvil-formats` (or `anvil-formats = "0.1"` under `[dependencies]`). It needs Rust 1.99 or newer.
 
 ## What it guarantees
 
