@@ -38,34 +38,53 @@ pub const DEFAULT_FORGE: &str = "DataPC.forge";
 /// Why a shader can't be opened by name.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Reading from the install's forges failed.
     #[error("{0}")]
     Archive(#[from] archive::Error),
+    /// None of the install directory's expected forge files ([`FORGES`]) exists; the directory is given.
     #[error("{}: none of the install's forge files ({}) is there", .0.display(), FORGES.join(", "))]
     NoForges(PathBuf),
+    /// The forge named is not one of the forges found in the install.
     #[error("forge {forge} is not among the install's: {}", .opened.join(", "))]
     NoForge { forge: String, opened: Vec<String> },
+    /// The entry is past the forge's tables, or is not a MaterialTemplate.
     #[error("entry {entry} of {forge} {what}")]
     NotATemplate {
+        /// The forge file's name.
         forge: String,
+        /// The entry's position in the forge's tables.
         entry: usize,
+        /// Which of the two it is.
         what: &'static str,
     },
+    /// A template's shader permutations could not be read.
     #[error("template {name} (entry {entry} of {forge}): {source}")]
     Permutations {
+        /// The forge file's name.
         forge: String,
+        /// The template's position in the forge's tables.
         entry: usize,
+        /// The template's entry name.
         name: String,
+        /// Why the permutations were refused.
         #[source]
         source: PermutationError,
     },
+    /// The template has no permutation of that stage with that key.
     #[error("template {name} (entry {entry} of {forge}) has no {stage} permutation with key {key:06x}")]
     NoPermutation {
+        /// The forge file's name.
         forge: String,
+        /// The template's position in the forge's tables.
         entry: usize,
+        /// The template's entry name.
         name: String,
+        /// The stage asked for, `"ps"` or `"vs"`.
         stage: &'static str,
+        /// The ShaderKey asked for.
         key: u32,
     },
+    /// A shader name did not parse; the strings are the text given and what was expected.
     #[error("shader name {0:?}: {1}")]
     Name(String, &'static str),
 }
@@ -77,7 +96,9 @@ pub struct ShaderName {
     pub forge: String,
     /// The template's entry: its position in the forge's tables.
     pub template: usize,
+    /// The stage of the program.
     pub stage: Stage,
+    /// The permutation's ShaderKey.
     pub key: u32,
 }
 
