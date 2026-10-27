@@ -2,8 +2,23 @@
 //! as separate values: blend@21, bits4/5@25/26, eight-bit reference@27, display mode@28, bits16..27@32..43,
 //! bits29/30@44/45. Runtime bit28 is not serialized. These are not the shader define bit positions.
 use super::material::{Error, Material};
-use crate::components::MaterialShader;
 use primase_foundations::bytes::{Endian, View};
+
+/// Source fields used by the native generic-material key setters. `flags` is the reconstructed runtime
+/// Material flag word, not a shader key. Texture presence follows the stored slots, including unread textures.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MaterialShader {
+    pub flags: u32,
+    pub layers: [bool; 2],
+    pub half_lambert: bool,
+    pub glossiness: bool,
+    pub layer3_no_specular: bool,
+    pub rim_alpha: bool,
+    pub hide: u32,
+    pub dynamic_uv: u32,
+    pub texture_slots: Vec<String>,
+    pub unsupported: Vec<String>,
+}
 const LE: Endian = Endian::Little;
 
 /// Read source controls without choosing a pass, frame, vertex layout or shader permutation.

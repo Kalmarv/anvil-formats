@@ -8,8 +8,8 @@
 //! population: of these 13,790 programs one is byte-identical to a container in it.
 use std::collections::BTreeSet;
 
-use primase_anvil::read::archive::{Archive, At};
-use primase_anvil::read::template::{self, MATERIAL_TEMPLATE, Stage};
+use anvil_formats::archive::{Archive, At};
+use anvil_formats::template::{self, MATERIAL_TEMPLATE, Stage};
 use primase_testdata::{Game, install};
 
 #[test]

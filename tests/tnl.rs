@@ -5,9 +5,9 @@
 use std::collections::{BTreeMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use primase_anvil::read::archive::{Archive, At};
-use primase_anvil::read::tnl::{StoredNodeLayer, StoredTnlChunk, TERRAIN_NODE_LAYER, node};
-use primase_anvil::read::tnl_code::{SIDE, heights, hilbert, raster, tile};
+use anvil_formats::archive::{Archive, At};
+use anvil_formats::tnl::{StoredNodeLayer, StoredTnlChunk, TERRAIN_NODE_LAYER, node};
+use anvil_formats::tnl_code::{SIDE, heights, hilbert, raster, tile};
 use primase_testdata::{Game, install};
 
 /// A strip's digest: the samples at x in `xs` and y in `ys`.

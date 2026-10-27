@@ -15,7 +15,7 @@
 //! one direct reference and none, two direct references and two dependencies; every byte consumed to the body's end,
 //! and every reference and dependency resolving to a Mesh record; games/riders-republic
 //! docs/recon/placement-darkroom-handoff.md, b8dae7b). Refused, naming it: another first byte or level marker, a
-//! reference [`crate::read::reference`] refuses, a dependency byte other than 0, a second count other than d, or
+//! reference [`crate::reference`] refuses, a dependency byte other than 0, a second count other than d, or
 //! bytes after the last 6. A level's count at +43 counts u32s kept as stored before its last byte (48 + 4n bytes):
 //! every LODSelector of Riders Republic (48,862) reads so to its body's end in the census; RRAssetStudio reads the same.
 #![deny(
@@ -24,8 +24,8 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::LE;
-use crate::read::reference::{self, Reference};
+use crate::fields::LE;
+use crate::reference::{self, Reference};
 use primase_foundations::bytes::{Cursor, Field, FieldError};
 
 /// A record type: equals the CRC-32 of the ASCII string `LODSelector` (the name a label).
@@ -47,7 +47,7 @@ pub enum Error {
         read: &'static str,
     },
     #[error("LODSelector level reference: {0}")]
-    Reference(#[source] crate::read::reference::Error),
+    Reference(#[source] crate::reference::Error),
     #[error("LODSelector body: {0} bytes after its end")]
     Trailing(usize),
 }

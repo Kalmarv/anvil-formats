@@ -3,7 +3,7 @@
 //! The body is 647 bytes in 1,971 of the 1,973 distinct Materials of the game's cells, the rest 659 and 663 (refused:
 //! [`Error::Length`]), and every field below is at the same offset in all of them. It begins `[managed u8][id][class]`
 //! and holds no length or count. Each texture slot is a TextureMapSpec's id (a bare u32; the spec's last u32 is the
-//! TextureMap's, read by [`crate::read::level`]); the slots of the layer kind carry five f32 after it, **scale u, scale
+//! TextureMap's id); the slots of the layer kind carry five f32 after it, **scale u, scale
 //! v, offset u, offset v, rotation in degrees** (the UV transform the slot samples with: the scale is 1 in most, 0.25 to 8 where a texture
 //! tiles, negative where it mirrors; the offset is 0 except in the second and third diffuse layers). The slots and the
 //! offsets of their ids:
@@ -48,7 +48,7 @@
 //! `GEN_GFX_Bonus2_Mat`, which are two-sided too. The byte at 79 (1 on 406, 2 on 37: characters, vehicles,
 //! helicopters, light paint) is not read by that update and is not sidedness. What no field here says is how `detail` and `diffuse2` combine.
 //! Their slots are kept without assigning those semantics. Restored RGB layering is established separately
-//! from the shipped SDB2 HLSL and compiled SM3 pixel shaders; [`crate::passes::LowerShaunwhiteLayers`] lowers it.
+//! from the shipped SDB2 HLSL and compiled SM3 pixel shaders.
 //!
 //! Byte 91 is the water shader switch: an independent inspection of 1,971 fixed-size materials finds it set on
 //! exactly six (Port, Pool, Toxic, Ocean, PirateShip, Reservoir). All six have normal/specular/cube-reflection
@@ -61,8 +61,25 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::components::LayerState;
 use primase_foundations::bytes::{Endian, Field, FieldError, View};
+
+/// Layer tints and alpha switches established by native property hashes and the shipped shader programs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LayerState {
+    /// Layer2_ModulationColor at 332 and Layer3_ModulationColor at 434.
+    pub colors: [[f32; 4]; 2],
+    /// UseTextureAlpha on diffuse1/2/3 at 224/392/494.
+    pub use_alpha: [bool; 3],
+}
+
+impl Default for LayerState {
+    fn default() -> Self {
+        Self {
+            colors: [[1.; 4]; 2],
+            use_alpha: [true; 3],
+        }
+    }
+}
 
 const LE: Endian = Endian::Little;
 
@@ -146,7 +163,7 @@ pub const SLOTS: [SlotSpec; 10] = [
     },
 ];
 
-/// The slots whose maps a lowering can use (the others are named in `shaunwhite.material`, their textures not read).
+/// The slots whose texture specs are read (the others are named by the material, their textures not read).
 pub const READ_SLOTS: [&str; 7] = [
     "mask",
     "diffuse",

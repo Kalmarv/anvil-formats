@@ -6,7 +6,7 @@
 //!   then a GridLayout: a u64 0, 0x7DB083ED, a run of u16, five i32, 3 bytes, a reference to its GridPartition (or
 //!   none). The run is 5 u16 in the base forges' Worlds and 4 in their patches' (all 12 GridLayouts of Riders
 //!   Republic, in MAD_WhiteRoom and MAD_USNAT); nothing before it in the body, its entry's blocks or the forge header
-//!   tells them apart, so its length is the caller's stated choice, and the reader refuses a World whose fields after
+//!   tells them apart, so its length is the caller's choice, and the reader refuses a World whose fields after
 //!   it don't follow.
 //! - **GridPartition**: `01`, a u32 level count, a u32 cell count c, c cells each a u64 0, 0x3435AD40 (GridCell),
 //!   `00` and a u64 (a GridCellDataBlock's ClassID, or 0), then a u32 0.
@@ -14,7 +14,7 @@
 //!   the notes measured), a u64 (its cell's number, or a DataLayer's ClassID).
 //!
 //! Grammars from the Riders Republic notes (docs/world.md §1-2, docs/placement.md §5 and §10), consumed to the last
-//! byte by the census (worlds/anvil/tests/census.rs) on every GridPartition and GridCellDataBlock of the game. The
+//! byte by a census on every GridPartition and GridCellDataBlock of the game. The
 //! five i32's names are AnvilToolkit's AC schemas' (a tool claim); what the u16 run, the 3 bytes and the u32 before
 //! the key are isn't read.
 #![deny(
@@ -25,8 +25,8 @@
 
 use primase_foundations::bytes::{Cursor, Field};
 
-use crate::read::fields::{BodyError, LE, body_error, count, end, expect, object, reference};
-use crate::read::reference;
+use crate::fields::{BodyError, LE, body_error, count, end, expect, object, reference};
+use crate::reference::{self, Reference};
 
 /// A record type: the CRC-32 of `World`.
 pub const WORLD: u32 = 0xFBB6_3E47;
@@ -50,10 +50,22 @@ pub enum Error {
 body_error!(Error, Error::Body);
 
 /// A GridLayout as stored.
-pub use crate::components::stored::GridLayout;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GridLayout {
+    pub words: Vec<u16>,
+    pub cell_size: i32,
+    pub bottom_left: [i32; 3],
+    pub dimension: i32,
+    pub after: [u8; 3],
+}
 
 /// One of a World's GridDescriptions.
-pub use crate::components::stored::GridDescription;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GridDescription {
+    pub id: u64,
+    pub layout: GridLayout,
+    pub partition: Option<Reference>,
+}
 
 /// A World's GridDescriptions, from the start of its body; `words` is the stated length of each GridLayout's u16 run.
 pub fn grid_descriptions(body: &[u8], words: usize) -> Result<Vec<GridDescription>, Error> {
@@ -93,7 +105,11 @@ pub fn grid_descriptions(body: &[u8], words: usize) -> Result<Vec<GridDescriptio
 }
 
 /// A GridPartition as stored.
-pub use crate::components::stored::StoredGridPartition;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredGridPartition {
+    pub levels: u32,
+    pub cells: Vec<u64>,
+}
 
 impl StoredGridPartition {
     pub fn parse(body: &[u8]) -> Result<StoredGridPartition, Error> {
@@ -115,7 +131,12 @@ impl StoredGridPartition {
 }
 
 /// A GridCellDataBlock as stored.
-pub use crate::components::stored::StoredGridCellDataBlock;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredGridCellDataBlock {
+    pub objects: Vec<Reference>,
+    pub word: u32,
+    pub key: u64,
+}
 
 impl StoredGridCellDataBlock {
     pub fn parse(body: &[u8]) -> Result<StoredGridCellDataBlock, Error> {

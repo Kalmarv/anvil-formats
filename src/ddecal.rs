@@ -1,7 +1,7 @@
 //! Deferred decals: a HoudiniDecalInstancerComponent's records (each a projection box in the world) and the
-//! DDecalModels they draw. Little-endian; a reference is [`crate::read::reference`]'s.
+//! DDecalModels they draw. Little-endian; a reference is [`crate::reference`]'s.
 //!
-//! The component body (docs/entity-grammar.md §9.2; its length rule in [`crate::read::entity`]): 212 bytes; an object
+//! The component body (docs/entity-grammar.md §9.2; its length rule in [`crate::entity`]): 212 bytes; an object
 //! `0xB43FECF1` (a StaticDDecalLibrary); a count R and R references (DDecalModels); a count S and S items, each `00`,
 //! an object `0x1ADB43B0` (DDecalStaticInstancers), 3 bytes (the first the item's model, an index into the R
 //! references: less than R on 34,477 of 34,477 items), a count k and k 100-byte records; 46 bytes. A record: a u64 0,
@@ -24,8 +24,8 @@
 
 use primase_foundations::bytes::{Cursor, Field};
 
-use crate::read::fields::{BodyError, body_error, count, end, expect, object, reference};
-use crate::read::reference::{self, Reference};
+use crate::fields::{BodyError, body_error, count, end, expect, object, reference};
+use crate::reference::{self, Reference};
 
 /// A component type: HoudiniDecalInstancerComponent.
 pub const HOUDINI_DECAL_INSTANCER: u32 = 0x4148_CD56;

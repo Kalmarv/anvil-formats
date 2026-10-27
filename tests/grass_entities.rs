@@ -2,12 +2,15 @@
 //! GrassVisual reads by its rule (the Visual head, a GrassVisualInstance with a MeshInstanceData's fields, its u16
 //! array, the imposter pointer, the Visual tail and the model's number), and a GrassComponent is read over its extent
 //! (its settings have no length rule): the library reference, the settings as stored and the ManagedEntities' ids.
-use primase_anvil::read::entity::{
-    BOUNDING_VOLUME, ComponentBody, GRASS_COMPONENT, GRASS_VISUAL, StoredEntity,
-};
+use anvil_formats::entity::{BOUNDING_VOLUME, ComponentBody, GRASS_COMPONENT, GRASS_VISUAL, StoredEntity};
 
 /// A reference to a Mesh as the forge stores one (a tag, a flag byte, a 5-byte id and zeros).
 const REFERENCE: [u8; 10] = [1, 1, 0x66, 0xB5, 0xAD, 0x34, 0xD0, 1, 0, 0];
+
+/// The component registry the bodies here are read with: the two types they hold.
+fn is_component_type(kind: u32) -> bool {
+    [GRASS_VISUAL, GRASS_COMPONENT].contains(&kind)
+}
 
 fn component(kind: u32, id: u64, body: &[u8]) -> Vec<u8> {
     let mut b = vec![4];
@@ -93,7 +96,7 @@ fn a_grass_visual_reads_by_its_rule() {
     body.extend(visual_tail());
     body.push(7); // GrassModelID
     let components = component(GRASS_VISUAL, 0x2_0000_0001, &body);
-    let e = StoredEntity::parse(&entity_body(1, &components)).expect("entity");
+    let e = StoredEntity::parse(&entity_body(1, &components), is_component_type).expect("entity");
     assert_eq!(e.components.len(), 1);
     let ComponentBody::GrassVisual(g) = &e.components[0].body else {
         panic!("not a GrassVisual: {:?}", e.components[0].body);
@@ -121,7 +124,7 @@ fn a_grass_component_reads_over_its_extent() {
     body.push(1);
     body.extend(0x2_0000_0011u64.to_le_bytes());
     let components = component(GRASS_COMPONENT, 0x2_0000_0001, &body);
-    let e = StoredEntity::parse(&entity_body(1, &components)).expect("entity");
+    let e = StoredEntity::parse(&entity_body(1, &components), is_component_type).expect("entity");
     assert_eq!(e.components.len(), 1);
     let ComponentBody::GrassSetup(g) = &e.components[0].body else {
         panic!("not a GrassSetup: {:?}", e.components[0].body);

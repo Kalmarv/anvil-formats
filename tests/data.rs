@@ -2,8 +2,8 @@
 //! real Mesh resources whose sizes, checksums, names and class ids were hand-checked in a separate read-only decode.
 use std::fs::File;
 
-use primase_anvil::read::data::{BLOCK_MAGIC, Error, Resource, read_entry};
-use primase_anvil::read::forge::Forge;
+use anvil_formats::data::{BLOCK_MAGIC, Error, Resource, read_entry};
+use anvil_formats::forge::Forge;
 use primase_testdata::{Game, install_file};
 
 const BOUND: usize = 1 << 20;

@@ -1,5 +1,5 @@
 //! Format contracts for the offline-established GI profile; these fixtures do not assert lighting semantics.
-use primase_anvil::read::gidyn::StoredGiDyn;
+use anvil_formats::gidyn::StoredGiDyn;
 
 fn fixture() -> Vec<u8> {
     let mut b = vec![1];

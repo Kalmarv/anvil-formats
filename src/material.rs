@@ -2,7 +2,7 @@
 //! for (its slot's role) is not read; nor is anything after the two.
 //!
 //! The body (little-endian, after the resource's class id and extension): a byte (1), then two 10-byte references
-//! ([`crate::read::reference`]: `01`, a byte and a u64 ClassID, or `03` and nine zeros for none), then the rest. No
+//! ([`crate::reference`]: `01`, a byte and a u64 ClassID, or `03` and nine zeros for none), then the rest. No
 //! count of references is stored before them, and the rest may hold more: two are what is established.
 //!
 //! Established on three Materials and a TextureSet (Riders Republic build 25394987, base WhiteRoom forge, entries 26,
@@ -10,18 +10,45 @@
 //! second reference resolves to a TextureSet in all three and its first to a MaterialTemplate (210's in the same forge;
 //! 26's and 162's in DataPC.forge, games/riders-republic docs/recon/material-reference-targets.md, aa2337c); the
 //! TextureSet's two resolve to TextureMaps. Another first byte, a reference
-//! [`crate::read::reference`] refuses, or a body shorter than the two references, is refused, naming it.
+//! [`crate::reference`] refuses, or a body shorter than the two references, is refused, naming it.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
 
-use crate::components::MaterialFlags;
-use crate::read::fields::LE;
-pub use crate::read::mesh::MATERIAL;
-use crate::read::reference::{self, Reference};
+use crate::fields::LE;
+pub use crate::mesh::MATERIAL;
+use crate::reference::{self, Reference};
 use primase_foundations::bytes::{Cursor, Field, FieldError};
+
+/// A Material's flags as stored: body 41 to 84 (of the 102 bytes after its references, 20 to 63), the fields the
+/// engine's Material deserialiser reads there in its order, named by its class registry (Riders Republic
+/// docs/shaders.md §6): `BlendMode` (a u32, of which the engine keeps 4 bits), `AlphaDisplayMode` (a u32, 2 bits),
+/// `AlphaTestValue` and 35 booleans, a byte each.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MaterialFlags {
+    pub blend_mode: u32,
+    pub alpha_display_mode: u32,
+    pub alpha_test_value: u8,
+    /// Boolean j at body 50 + j.
+    pub booleans: [u8; 35],
+}
+
+impl MaterialFlags {
+    /// Booleans by their registry names (index j).
+    pub const Z_WRITE_DISABLED_OPAQUE: usize = 0;
+    pub const Z_WRITE_DISABLED_ALPHA: usize = 1;
+    pub const Z_TEST_DISABLED: usize = 2;
+    pub const LAYER_MATERIAL: usize = 3;
+    pub const PRE_TRANSPARENT: usize = 10;
+    pub const FLIP_NORMAL_ON_BACK_FACE: usize = 11;
+    pub const RENDER_IN_LOW_RESOLUTION: usize = 15;
+    pub const ALPHA_TEST_ENABLED: usize = 24;
+    pub const TWO_SIDED: usize = 25;
+    /// The boolean whose name's CRC-32 is `42452A12` (the name not known).
+    pub const BOOLEAN_42452A12: usize = 34;
+}
 
 /// A record type: equals the CRC-32 of the ASCII string `TextureSet` (the name a label).
 pub const TEXTURE_SET: u32 = 0xD70E_6670;
@@ -41,7 +68,7 @@ pub enum Error {
     Reference {
         index: usize,
         #[source]
-        source: crate::read::reference::Error,
+        source: crate::reference::Error,
     },
 }
 
@@ -268,7 +295,7 @@ impl StoredMaterial {
     }
 }
 
-/// A TextureSet's body as stored: a byte (1), 19 references ([`crate::read::reference`]), a zero byte, 8 bytes and a
+/// A TextureSet's body as stored: a byte (1), 19 references ([`crate::reference`]), a zero byte, 8 bytes and a
 /// u32, 204 bytes in all. Established by the census: every TextureSet of Riders Republic (10,027) is exactly that,
 /// ending the body (RRAssetStudio reads the same). Which reference is which texture's role is not read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -292,7 +319,7 @@ pub enum TextureSetError {
     Reference {
         index: usize,
         #[source]
-        source: crate::read::reference::Error,
+        source: crate::reference::Error,
     },
 }
 

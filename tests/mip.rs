@@ -2,10 +2,10 @@
 //! (games/riders-republic docs/recon/compiled-mip-reader-request.md, f9925f0).
 use std::fs::File;
 
-use primase_anvil::read::data::{Resource, read_entry};
-use primase_anvil::read::forge::Forge;
-use primase_anvil::read::mip::{COMPILED_MIP, StoredMip};
-use primase_anvil::read::shapes::MAX_RECORD;
+use anvil_formats::archive::MAX_RECORD;
+use anvil_formats::data::{Resource, read_entry};
+use anvil_formats::forge::Forge;
+use anvil_formats::mip::{COMPILED_MIP, StoredMip};
 use primase_testdata::{Game, install_file};
 
 #[test]

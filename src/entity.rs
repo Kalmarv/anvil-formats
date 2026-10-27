@@ -18,7 +18,7 @@
 //! USNAT groups; the census measures it read from the start). What a member or a link is to its group is not read.
 //!
 //! The grammar is from the Riders Republic placement notes (docs/entity-grammar.md, consumed to the last byte on 8 of
-//! 8 fixtures and 97% of 5,200 sampled USNAT Entities); the census (worlds/anvil/tests/census.rs) measures it on every
+//! 8 fixtures and 97% of 5,200 sampled USNAT Entities); a census measures it on every
 //! Entity of the game. Fixed component sizes and the 125-byte Visual tail are observations on every body measured,
 //! not stored lengths.
 #![deny(
@@ -27,9 +27,8 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::component_types::is_component_type;
-use crate::read::fields::{BodyError, LE, body_error, count, end, expect, object, reference};
-use crate::read::reference::{self, Reference};
+use crate::fields::{BodyError, LE, body_error, count, end, expect, object, reference};
+use crate::reference::{self, Reference};
 use primase_foundations::bytes::{Field, View};
 
 /// A record type: equals the CRC-32 of the ASCII string `Entity` (the name a label).
@@ -370,7 +369,36 @@ pub enum ComponentBody {
     },
 }
 
-pub use crate::components::{layer, query};
+/// `CollisionLayerBits` slots by the registry's names.
+pub mod layer {
+    pub const STATIC: u32 = 0;
+    pub const DYNAMIC: u32 = 2;
+    pub const DEBRIS: u32 = 3;
+    pub const DETECTION_ZONE: u32 = 4;
+    pub const MAIN_CHARACTER: u32 = 5;
+    pub const CHARACTER: u32 = 6;
+    pub const CHARACTER_NO_INTERACTIVE: u32 = 7;
+    pub const WATER_LEVEL: u32 = 13;
+    pub const TARGETABLE: u32 = 14;
+    /// `TerrainLod0`; `TerrainLod1` to `4` follow.
+    pub const TERRAIN_LOD0: u32 = 16;
+}
+
+/// `QueryLayerBits` slots by the registry's names (the others are unnamed or unset in the data).
+pub mod query {
+    pub const STATIC: u32 = 0;
+    pub const DYNAMIC: u32 = 2;
+    pub const CAMERA_COLLISION: u32 = 3;
+    pub const CAMERA_OCCLUSION: u32 = 5;
+    pub const CHARACTER: u32 = 9;
+    pub const WATER_LEVEL: u32 = 10;
+    pub const PARTICLE: u32 = 11;
+    pub const RAYCAST: u32 = 19;
+    pub const OCCLUSION_HEIGHT_TEST: u32 = 20;
+    pub const TARGETING: u32 = 21;
+    /// `TerrainLod0`; `TerrainLod1` to `4` follow.
+    pub const TERRAIN_LOD0: u32 = 25;
+}
 
 /// A RigidBody's `CollisionFilterInfo` as the game's registry names it (registry-named-fields §9, §10): its
 /// `QueryFlags` (a `QueryLayerBits`: 34 bit fields, each stored as a u64 0 or 1, from the RigidBodyComponent's offset
@@ -485,20 +513,32 @@ pub struct StoredEntity {
     pub hierarchy: Option<Vec<u8>>,
 }
 
-/// The body's cursor ([`primase_foundations::bytes::Cursor`]), with this record's grammar as methods.
-struct Cursor<'a>(primase_foundations::bytes::Cursor<'a>);
+/// Whether a u32 is the type of one of the game's component classes (the caller's registry: see
+/// [`StoredEntity::parse`]).
+type ComponentTypes<'a> = &'a dyn Fn(u32) -> bool;
+
+/// The body's cursor ([`primase_foundations::bytes::Cursor`]), with this record's grammar as methods, and the component types it
+/// delimits components by.
+struct Cursor<'a> {
+    c: primase_foundations::bytes::Cursor<'a>,
+    types: ComponentTypes<'a>,
+}
 
 impl<'a> Cursor<'a> {
-    fn new(b: &'a [u8]) -> Self {
-        Cursor(primase_foundations::bytes::Cursor::new(b))
+    fn new(b: &'a [u8], types: ComponentTypes<'a>) -> Self {
+        Cursor {
+            c: primase_foundations::bytes::Cursor::new(b),
+            types,
+        }
     }
     /// A cursor over `b` at `at`, refused past its end (naming `what`).
     fn at(
         b: &'a [u8],
         at: usize,
         what: &'static str,
+        types: ComponentTypes<'a>,
     ) -> Result<Self, primase_foundations::bytes::FieldError> {
-        let mut c = Cursor::new(b);
+        let mut c = Cursor::new(b, types);
         c.seek(at).field(what)?;
         Ok(c)
     }
@@ -507,13 +547,13 @@ impl<'a> Cursor<'a> {
 impl<'a> std::ops::Deref for Cursor<'a> {
     type Target = primase_foundations::bytes::Cursor<'a>;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.c
     }
 }
 
 impl std::ops::DerefMut for Cursor<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.c
     }
 }
 
@@ -1335,15 +1375,17 @@ impl StoredEntity {
     /// The body parsed. Its components are read by their types' rules where every type has one and the tail then ends
     /// the body. Otherwise they are delimited by their headers: the tail is found from the first component (the
     /// bounding volume's and descriptor's types where it puts them, then the rest of the body as the tail), and the
-    /// headers between are the components' (a tag, an id and the type of a component class, [`COMPONENT_TYPES`]; where
+    /// headers between are the components' (a tag, an id and the type of a component class, `is_component_type`; where
     /// more than the count say, those with the first component's tag, or an id near the first's, as embedded objects
     /// begin alike), exactly as many as the count. A component of a type with a rule is then read by it over its
     /// extent; the others, and any whose rule ends elsewhere, are [`ComponentBody::Unread`]. On the six forges of
     /// Riders Republic every one of the 615,110 Entities and 56,837 EntityGroups reads so.
     ///
-    /// [`COMPONENT_TYPES`]: crate::read::component_types::COMPONENT_TYPES
-    pub fn parse(body: &[u8]) -> Result<StoredEntity, Error> {
-        let mut c = Cursor::new(body);
+    /// `is_component_type` is the game's class registry as the caller has it: whether a u32 is the type of one of its
+    /// component classes (the CRC-32 of the class name). Only bodies with a component that has no length rule here
+    /// consult it.
+    pub fn parse(body: &[u8], is_component_type: impl Fn(u32) -> bool) -> Result<StoredEntity, Error> {
+        let mut c = Cursor::new(body, &is_component_type);
         let e = entity(&mut c, false)?;
         end(&c)?;
         Ok(e)
@@ -1408,9 +1450,9 @@ pub struct StoredEntityGroup {
 
 impl StoredEntityGroup {
     /// The body parsed: the Entity grammar, a u32 count c, c references (none of them `03`), a u32 count m, m links
-    /// (`00` and a u64) and a u32.
-    pub fn parse(body: &[u8]) -> Result<StoredEntityGroup, Error> {
-        let mut c = Cursor::new(body);
+    /// (`00` and a u64) and a u32. `is_component_type` is the game's class registry, as for [`StoredEntity::parse`].
+    pub fn parse(body: &[u8], is_component_type: impl Fn(u32) -> bool) -> Result<StoredEntityGroup, Error> {
+        let mut c = Cursor::new(body, &is_component_type);
         let entity = entity(&mut c, true)?;
         let (members, links, word) = c.members()?;
         end(&c)?;
@@ -1549,7 +1591,7 @@ impl Cursor<'_> {
             && at
                 .checked_add(9)
                 .and_then(|w| self.word_at(w))
-                .is_some_and(is_component_type)
+                .is_some_and(self.types)
     }
 
     /// An Entity's tail from the cursor.
@@ -1650,7 +1692,7 @@ impl Cursor<'_> {
             self.word_at(at.saturating_add(TAIL_BOUNDS_TYPE)) == Some(BOUNDING_VOLUME)
                 && self.word_at(at.saturating_add(TAIL_DESCRIPTOR_TYPE)) == Some(ENTITY_DESCRIPTOR)
                 && {
-                    let mut tail = Cursor::new(self.bytes());
+                    let mut tail = Cursor::new(self.bytes(), self.types);
                     tail.seek(at).is_ok()
                         && tail.entity_tail().is_ok()
                         && (!group || tail.members().is_ok())
@@ -1731,15 +1773,16 @@ impl Cursor<'_> {
         for next in heads.iter().map(|&h| Some(h)).chain([None]) {
             let body_end = next.unwrap_or(end);
             let (tag, id, kind) = header;
-            let bytes = Cursor::at(self.bytes(), body_start, "component")?
+            let bytes = Cursor::at(self.bytes(), body_start, "component", self.types)?
                 .take_to(body_end)
                 .field("component")?;
             // the component read within its extent
             let within = self.bytes().get(..body_end).unwrap_or(self.bytes());
-            let mut part = Cursor::at(within, body_start, "component")?;
+            let mut part = Cursor::at(within, body_start, "component", self.types)?;
             let body = match part.component_body(kind, body_start) {
                 Ok(Some(body)) if part.position() == body_end => body,
-                _ => match Cursor::at(within, body_start, "component")?.by_extent(kind, body_end) {
+                _ => match Cursor::at(within, body_start, "component", self.types)?.by_extent(kind, body_end)
+                {
                     Some(Ok(body)) => body,
                     Some(Err(why)) => ComponentBody::Refused {
                         bytes: bytes.to_vec(),
@@ -1750,7 +1793,7 @@ impl Cursor<'_> {
             };
             out.push(Component { tag, id, kind, body });
             if let Some(h) = next {
-                let mut head = Cursor::at(self.bytes(), h, "component header")?;
+                let mut head = Cursor::at(self.bytes(), h, "component header", self.types)?;
                 header = head.component_header()?;
                 body_start = head.position();
             }
@@ -1773,7 +1816,7 @@ impl Cursor<'_> {
             }
         }
         let tail = self.entity_tail()?;
-        let mut rest = Cursor::at(self.bytes(), self.position(), "Entity tail")?;
+        let mut rest = Cursor::at(self.bytes(), self.position(), "Entity tail", self.types)?;
         if group {
             rest.members()?;
         }

@@ -1,4 +1,4 @@
-//! The collision shapes besides MeshShape (see [`crate::read::mesh_shape`]): SphereShape, CapsuleShape, BoxShape and
+//! The collision shapes besides MeshShape (see [`crate::mesh_shape`]): SphereShape, CapsuleShape, BoxShape and
 //! ReferenceListShape. Each type id is the CRC-32 of its name. Little-endian throughout; vec4 is four f32.
 //!
 //! - **SphereShape** (35 bytes): `01`, a u32 0, a vec4 centre, an f32 radius, a reference to its CollisionMaterial
@@ -13,7 +13,7 @@
 //!
 //! The grammars are the Riders Republic notes' (docs/collision.md: every entry of each type to its last byte; the
 //! reference list's matrices column-major as ACExplorer's reader takes them, equal on all 3,731), consumed to the last
-//! byte by the census (worlds/anvil/tests/census.rs) on every entry of the game. The notes read the vectors as
+//! byte by a census on every entry of the game. The notes read the vectors as
 //! positions, lengths and transforms in their owner's local frame (each shape's box against the stored boxes of the
 //! lists and Entities holding it); what the reference list's vec4 array and the box's byte are isn't read.
 #![deny(
@@ -22,8 +22,8 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::{BodyError, LE, body_error, count, end, expect, f32s, reference};
-use crate::read::reference::{self, Reference};
+use crate::fields::{BodyError, LE, body_error, count, end, expect, f32s, reference};
+use crate::reference::{self, Reference};
 use primase_foundations::bytes::{Cursor, Field};
 
 /// A record type: the CRC-32 of `SphereShape`.

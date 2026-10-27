@@ -5,8 +5,16 @@
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
-use super::reference;
-pub use crate::components::stored::StoredImpostor;
+use super::reference::{self, Reference};
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredImpostor {
+    pub head: [u8; 71],
+    pub maps: [Option<Reference>; 4],
+    pub table: [u32; 21],
+    pub top: usize,
+    pub side: usize,
+    pub cards: Vec<[f32; 27]>,
+}
 
 pub const IMPOSTOR: u32 = 0xDFCD_6E51;
 fn offset(base: usize, index: usize, stride: usize) -> Result<usize, String> {

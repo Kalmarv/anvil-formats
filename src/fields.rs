@@ -7,7 +7,7 @@
 
 use primase_foundations::bytes::{BoundsError, Cursor, Endian, Field, FieldError};
 
-use crate::read::reference::{self, Reference};
+use crate::reference::{self, Reference};
 
 /// Every anvil format is little-endian.
 pub(crate) const LE: Endian = Endian::Little;
@@ -58,7 +58,7 @@ macro_rules! body_error {
     ($error:ty, $variant:path) => {
         impl From<primase_foundations::bytes::FieldError> for $error {
             fn from(e: primase_foundations::bytes::FieldError) -> Self {
-                $variant(crate::read::fields::BodyError::from(e))
+                $variant(crate::fields::BodyError::from(e))
             }
         }
     };

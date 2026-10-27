@@ -2,9 +2,9 @@
 //! prefixes, section runs and tails were hand-checked in a separate read-only decode.
 use std::fs::File;
 
-use primase_anvil::read::data::{Resource, read_entry};
-use primase_anvil::read::forge::Forge;
-use primase_anvil::read::mesh_shape::{
+use anvil_formats::data::{Resource, read_entry};
+use anvil_formats::forge::Forge;
+use anvil_formats::mesh_shape::{
     COUNTS, EDGE_FACES, Error, FACE_EDGES, FACES, MESH_SHAPE, MeshShape, NO_FACE, POSITIONS,
 };
 use primase_testdata::{Game, install_file};

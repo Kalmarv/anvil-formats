@@ -8,7 +8,7 @@
 //! each starting where the one before ends. [`descriptors`] takes the one place in the body where such a run reads
 //! whole; a body with none, or with more than one, is refused.
 //!
-//! Established by the census (worlds/anvil/tests/census.rs) on every MaterialTemplate of Riders Republic, and by the
+//! Established by a census on every MaterialTemplate of Riders Republic, and by the
 //! join it measures: a Material's texture-property key equals the CRC-32 of the second string of a descriptor in its
 //! own template. What the strings, the byte, the u64 and the u32 mean is not read (the second string reads as a
 //! label: "2 - Normal Map").
@@ -29,8 +29,8 @@
 //! `MapType` (the TextureSet slot), a u32 0, and the default set and texture, each null where the template names none)
 //! and its `SamplerMode`. A texture binding may instead link a ShaderCustomTextureOperator (36 in the game's templates,
 //! 14 templates): the TextureObject definition instanced through the custom-operator mechanism, with the same
-//! TextureSelector (docs/material-spec.md §27.0), read by walking its stored pins ([`custom_texture`]). The census
-//! (worlds/anvil/tests/template_defaults.rs) reads every binding's Operator on every MaterialTemplate, against the
+//! TextureSelector (docs/material-spec.md §27.0), read by walking its stored pins ([`custom_texture`]). A census
+//! (tests/template_defaults.rs) reads every binding's Operator on every MaterialTemplate, against the
 //! registry's worked examples.
 #![deny(
     clippy::arithmetic_side_effects,
@@ -38,11 +38,11 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::LE;
+use crate::fields::LE;
 use primase_foundations::bytes::Cursor;
 
 /// A record type: equals the CRC-32 of the ASCII string `MaterialTemplate` (the name a label).
-pub use crate::read::material::MATERIAL_TEMPLATE;
+pub use crate::material::MATERIAL_TEMPLATE;
 
 /// A descriptor's marker, after its eight zero bytes.
 pub const DESCRIPTOR: u32 = 0xD933_DB50;
@@ -69,7 +69,7 @@ pub struct Binding {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Target {
     /// A reference (tag 1) or none (tag 3).
-    Reference(Option<crate::read::reference::Reference>),
+    Reference(Option<crate::reference::Reference>),
     /// Another form, as stored: tag 0 (then a byte and a u64; the generic `Texture` bindings hold it), not read.
     Stored([u8; 10]),
 }
@@ -120,12 +120,11 @@ pub fn bindings(body: &[u8]) -> Result<Vec<Binding>, BindingError> {
         else {
             return Err(short);
         };
-        let bytes: [u8; crate::read::reference::LENGTH] = c.array().map_err(|_| BindingError::Short(at))?;
+        let bytes: [u8; crate::reference::LENGTH] = c.array().map_err(|_| BindingError::Short(at))?;
         let target = match bytes {
             [0, ..] => Target::Stored(bytes),
             _ => Target::Reference(
-                crate::read::reference::parse(bytes)
-                    .map_err(|source| BindingError::Reference { at, source })?,
+                crate::reference::parse(bytes).map_err(|source| BindingError::Reference { at, source })?,
             ),
         };
         // up to 8 bytes after the record, as many as the body holds
@@ -152,8 +151,8 @@ pub struct TextureParameter {
     pub channel: u32,
     pub slot: u32,
     /// The default set and texture the template names (none: null).
-    pub set: Option<crate::read::reference::Reference>,
-    pub texture: Option<crate::read::reference::Reference>,
+    pub set: Option<crate::reference::Reference>,
+    pub texture: Option<crate::reference::Reference>,
 }
 
 impl TextureParameter {
@@ -175,10 +174,9 @@ impl TextureParameter {
         if marker != TEXTURE_PARAMETER || zero != 0 || third != 0 {
             return Err(BindingError::Parameter(at));
         }
-        let mut reference = || -> Result<Option<crate::read::reference::Reference>, BindingError> {
-            let bytes: [u8; crate::read::reference::LENGTH] =
-                c.array().map_err(|_| BindingError::Short(at))?;
-            crate::read::reference::parse(bytes).map_err(|source| BindingError::Reference { at, source })
+        let mut reference = || -> Result<Option<crate::reference::Reference>, BindingError> {
+            let bytes: [u8; crate::reference::LENGTH] = c.array().map_err(|_| BindingError::Short(at))?;
+            crate::reference::parse(bytes).map_err(|source| BindingError::Reference { at, source })
         };
         let set = reference()?;
         let texture = reference()?;
@@ -442,7 +440,7 @@ pub enum BindingError {
     Reference {
         at: usize,
         #[source]
-        source: crate::read::reference::Error,
+        source: crate::reference::Error,
     },
 }
 
@@ -797,11 +795,80 @@ pub fn feature_node(body: &[u8]) -> Result<&[u8], FeatureError> {
     body.get(start..end).ok_or(FeatureError::Unterminated(at))
 }
 
-/// A template's permutations ([`permutations`]) as the tables of its [`AnvilShaders`]: each stage's keys, sorted, a
+/// A MaterialTemplate's shader permutations: each stage's ShaderKeys and their programs' DXBC containers, as stored
+/// ([`permutations`]). A key names a permutation within its stage (the engine's ShaderKey, bits
+/// 22 to 29 its pass); the same key may be in both stages, each with its own program.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShaderTables {
+    /// (ShaderKey, index into `programs`) of the pixel stage, the keys strictly ascending (each once): the engine looks
+    /// a key up exactly ([`ShaderTables::check`]).
+    pub pixel: Vec<(u32, usize)>,
+    /// The same for the vertex stage.
+    pub vertex: Vec<(u32, usize)>,
+    /// The containers, each once: permutations that share a program share its index.
+    pub programs: Vec<Vec<u8>>,
+    /// The body of the template's shader-state node as stored ([`feature_node`]): the object's
+    /// byte, then the template's feature flags.
+    pub feature_node: Vec<u8>,
+}
+
+impl ShaderTables {
+    /// What the lookups rely on: each stage's keys strictly ascending (a key twice would name two programs, and an
+    /// unsorted list would miss keys it holds), and every index naming one of `programs`.
+    pub fn check(&self) -> Result<(), String> {
+        for (stage, table) in [("pixel", &self.pixel), ("vertex", &self.vertex)] {
+            let unordered = table.windows(2).find_map(|w| match w {
+                [(a, _), (b, _)] if a >= b => Some((*a, *b)),
+                _ => None,
+            });
+            if let Some((a, b)) = unordered {
+                return Err(format!("{stage} keys not strictly ascending: {a:#x} then {b:#x}"));
+            }
+            if let Some(&(key, index)) = table.iter().find(|&&(_, i)| i >= self.programs.len()) {
+                return Err(format!(
+                    "{stage} key {key:#x} names program {index} of {}",
+                    self.programs.len()
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn program(&self, stage: &[(u32, usize)], key: u32) -> Option<&[u8]> {
+        let at = stage.binary_search_by_key(&key, |&(k, _)| k).ok()?;
+        let &(_, program) = stage.get(at)?;
+        self.programs.get(program).map(Vec::as_slice)
+    }
+
+    /// The stored byte of feature `n` (bit `n` of the engine's feature word `T`, which gates bits of the ShaderKey:
+    /// docs/shaders.md §6.2): byte `n + 1` of the template's shader-state node, `None` where the node has no such byte.
+    /// It is 0 or 1 for every feature but 15, which is also 2 on 82 of the 432 templates (see `tests/template_features.rs`).
+    pub fn feature_byte(&self, n: usize) -> Option<u8> {
+        self.feature_node.get(n.checked_add(1)?).copied()
+    }
+
+    /// Whether the template has feature `n`: its byte is not 0. The census (`tests/template_features.rs`) holds this to
+    /// the key bit the feature gates on all 432 templates, for the byte 2 of feature 15 as for the byte 1 of the rest.
+    pub fn feature(&self, n: usize) -> Option<bool> {
+        self.feature_byte(n).map(|b| b != 0)
+    }
+
+    /// The program the pixel key `key` names.
+    pub fn pixel(&self, key: u32) -> Option<&[u8]> {
+        self.program(&self.pixel, key)
+    }
+
+    /// The program the vertex key `key` names.
+    pub fn vertex(&self, key: u32) -> Option<&[u8]> {
+        self.program(&self.vertex, key)
+    }
+}
+
+/// A template's permutations ([`permutations`]) as the tables of its [`ShaderTables`]: each stage's keys, sorted, a
 /// permutation listed twice with the same program kept once (a key with two programs stays twice, which
-/// [`AnvilShaders::check`] refuses), and each program's container once, however many permutations name it; `feature_node` its shader-state node's body
+/// [`ShaderTables::check`] refuses), and each program's container once, however many permutations name it; `feature_node` its shader-state node's body
 /// ([`feature_node`]).
-pub fn shader_tables(read: &[Permutation<'_>], feature_node: &[u8]) -> crate::components::AnvilShaders {
+pub fn shader_tables(read: &[Permutation<'_>], feature_node: &[u8]) -> ShaderTables {
     let mut programs: Vec<(usize, Vec<u8>)> = Vec::new();
     let (mut pixel, mut vertex) = (Vec::new(), Vec::new());
     for p in read {
@@ -821,7 +888,7 @@ pub fn shader_tables(read: &[Permutation<'_>], feature_node: &[u8]) -> crate::co
         stage.sort_unstable();
         stage.dedup();
     }
-    crate::components::AnvilShaders {
+    ShaderTables {
         pixel,
         vertex,
         programs: programs.into_iter().map(|(_, p)| p).collect(),

@@ -13,7 +13,7 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::LE;
+use crate::fields::LE;
 use primase_foundations::bytes::{Cursor, Field, FieldError};
 
 /// A record type: equals the CRC-32 of the ASCII string `CompiledMip` (the name a label).
@@ -40,7 +40,7 @@ pub struct StoredMip {
     /// The class id of the TextureMap this level belongs to.
     pub parent: u64,
     /// The u32 ending the body. On TextureMap 31 (base WhiteRoom) the CompiledMips it refers to first and second store
-    /// 0 and 1, and their images are exactly its BC7 level 0 and 1 sizes (worlds/anvil/tests/texture.rs).
+    /// 0 and 1, and their images are exactly its BC7 level 0 and 1 sizes.
     pub level: u32,
 }
 

@@ -6,21 +6,21 @@
 //! names; the names here are those class names). A type no reader reads has no kind: its entry is listed with its
 //! type id as stored, so a consumer lists what is there without a comparison of its own.
 
-use crate::read::archive::Archive;
-use crate::read::ddecal::DDECAL_MODEL;
-use crate::read::entity::{ENTITY, ENTITY_GROUP};
-use crate::read::floor::FLOOR_HEIGHT_DATA;
-use crate::read::forge::Forge;
-use crate::read::grid::{GRID_CELL_DATA_BLOCK, GRID_PARTITION, WORLD};
-use crate::read::lod::LOD_SELECTOR;
-use crate::read::material::{MATERIAL_TEMPLATE, TEXTURE_MAP, TEXTURE_SET};
-use crate::read::mesh::{MATERIAL, MESH};
-use crate::read::mesh_shape::MESH_SHAPE;
-use crate::read::mip::COMPILED_MIP;
-use crate::read::shape::{BOX_SHAPE, CAPSULE_SHAPE, REFERENCE_LIST_SHAPE, SPHERE_SHAPE};
-use crate::read::skeleton::SKELETON;
-use crate::read::terrain_material::{COLLISION_MATERIAL, TERRAIN_MATERIAL, TERRAIN_MATERIAL_BANK};
-use crate::read::tnl::TERRAIN_NODE_LAYER;
+use crate::archive::Archive;
+use crate::ddecal::DDECAL_MODEL;
+use crate::entity::{ENTITY, ENTITY_GROUP};
+use crate::floor::FLOOR_HEIGHT_DATA;
+use crate::forge::Forge;
+use crate::grid::{GRID_CELL_DATA_BLOCK, GRID_PARTITION, WORLD};
+use crate::lod::LOD_SELECTOR;
+use crate::material::{MATERIAL_TEMPLATE, TEXTURE_MAP, TEXTURE_SET};
+use crate::mesh::{MATERIAL, MESH};
+use crate::mesh_shape::MESH_SHAPE;
+use crate::mip::COMPILED_MIP;
+use crate::shape::{BOX_SHAPE, CAPSULE_SHAPE, REFERENCE_LIST_SHAPE, SPHERE_SHAPE};
+use crate::skeleton::SKELETON;
+use crate::terrain_material::{COLLISION_MATERIAL, TERRAIN_MATERIAL, TERRAIN_MATERIAL_BANK};
+use crate::tnl::TERRAIN_NODE_LAYER;
 
 /// A kind of entry some reader of this crate reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -124,12 +124,12 @@ impl Kind {
             Kind::FloorHeightData => FLOOR_HEIGHT_DATA,
             Kind::DecalModel => DDECAL_MODEL,
             Kind::Skeleton => SKELETON,
-            Kind::Impostor => crate::read::impostor::IMPOSTOR,
-            Kind::LayeredSky => crate::read::sky::LAYERED_SKY,
-            Kind::WorldAmbiance => crate::read::sky::WORLD_AMBIANCE,
-            Kind::GiDynResource => crate::read::gidyn::GI_DYN_RESOURCE,
-            Kind::AmbiancePreset => crate::read::look::AMBIANCE_PRESET,
-            Kind::ForecastPreset => crate::read::look::FORECAST_PRESET,
+            Kind::Impostor => crate::impostor::IMPOSTOR,
+            Kind::LayeredSky => crate::sky::LAYERED_SKY,
+            Kind::WorldAmbiance => crate::sky::WORLD_AMBIANCE,
+            Kind::GiDynResource => crate::gidyn::GI_DYN_RESOURCE,
+            Kind::AmbiancePreset => crate::look::AMBIANCE_PRESET,
+            Kind::ForecastPreset => crate::look::FORECAST_PRESET,
         }
     }
 
@@ -173,7 +173,7 @@ impl Kind {
 /// One entry of a forge's tables.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Listed<'a> {
-    /// Its position in the forge's tables (the `entry` of an [`At`](crate::read::archive::At)).
+    /// Its position in the forge's tables (the `entry` of an [`At`](crate::archive::At)).
     pub entry: usize,
     /// Its ClassID: the index id other resources refer to it by.
     pub id: u64,

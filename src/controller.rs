@@ -6,11 +6,23 @@
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
-pub use crate::components::stored::{Controller, Track};
+use crate::archive::{Archive, At};
 
-use primase_core::World;
+#[derive(Clone, Debug, PartialEq)]
+pub struct Controller {
+    pub tracks: Vec<Track>,
+}
 
-use crate::read::archive::{Archive, At};
+#[derive(Clone, Debug, PartialEq)]
+pub struct Track {
+    pub path: Vec<u32>,
+    pub kind: u32,
+    pub times: Vec<u16>,
+    pub values: Vec<[f32; 4]>,
+    pub path_flags: [u8; 2],
+    pub binding: u64,
+    pub trailer: [u8; 5],
+}
 
 pub const TIME_OF_DAY: u32 = 0xF0C8_5018;
 pub const WEATHER: u32 = 0x8870_04DC;
@@ -223,17 +235,19 @@ pub fn named_resource(archive: &Archive, name: &str) -> Option<At> {
         })
 }
 
-/// Attach the look's authored controllers to the sky entity `entity` as `anvil.sky_controllers`: the time-of-day one
-/// (`TOD_<look>`, which the atmosphere has) and the weather one (`WEA_<look>`, when a forge holds it). Reading the
-/// look's controllers is reading: only the class of each resource is checked, and the controller's own parse states
-/// what it can hold. The error is the reason (the caller states it as a notice beside the sky's own defaults); an
-/// absent time-of-day controller is one, an absent weather controller is not.
-pub fn attach_sky_controllers(
-    archive: &mut Archive,
-    world: &mut World,
-    entity: primase_core::Entity,
-    look: &str,
-) -> Result<(), String> {
+/// A look's authored controllers: the time-of-day one (`TOD_<look>`) and the weather one (`WEA_<look>`), which the
+/// forges need not hold.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LookControllers {
+    pub time_of_day: Controller,
+    pub weather: Option<Controller>,
+}
+
+/// The authored controllers of the look `look`: the time-of-day one (`TOD_<look>`, which the atmosphere has) and the
+/// weather one (`WEA_<look>`, when a forge holds it). Only the class of each resource is checked, and the
+/// controller's own parse states what it can hold. The error is the reason; an absent time-of-day controller is one,
+/// an absent weather controller is not.
+pub fn look_controllers(archive: &mut Archive, look: &str) -> Result<LookControllers, String> {
     let read = |archive: &mut Archive, class: u32| -> Result<Option<Controller>, String> {
         let Some(name) = controller_name(class, look) else {
             return Err(format!("{class:#x}: not a look controller class"));
@@ -253,16 +267,9 @@ pub fn attach_sky_controllers(
     let time_of_day =
         read(archive, TIME_OF_DAY)?.ok_or_else(|| format!("TOD_{look}: time-of-day controller absent"))?;
     let weather = read(archive, WEATHER)?;
-    world.insert(
-        entity,
-        crate::components::AnvilSkyControllers {
-            look: look.to_owned(),
-            time_of_day,
-            weather,
-        },
-    );
-    Ok(())
+    Ok(LookControllers { time_of_day, weather })
 }
+
 #[cfg(test)]
 #[allow(
     clippy::arithmetic_side_effects,

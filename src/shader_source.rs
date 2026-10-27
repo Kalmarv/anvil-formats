@@ -6,8 +6,8 @@
 //! A template is named as the tools that dump them do: the entry's position in its forge's tables
 //! (`t106683`, in `DataPC.forge` unless a forge is stated: `DataPC_MAD_USNAT:t61916`), the key in hex and the stage:
 //! `t106683-0485bb.ps.dxbc`, optionally under a directory `ps106683/`. [`ShaderName`] parses and prints that form.
-//! The key is the engine's ShaderKey as the `anvil.shaders` component holds it (`AnvilShaders::pixel`), so a name
-//! round-trips with a material's tables. Nothing is decoded beyond the template body; the container is returned as
+//! The key is the engine's ShaderKey as a template's tables hold it ([`crate::template::ShaderTables::pixel`]), so a
+//! name round-trips with a material's tables. Nothing is decoded beyond the template body; the container is returned as
 //! stored.
 #![allow(
     clippy::disallowed_methods,
@@ -18,9 +18,9 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use crate::read::archive::{self, Archive, At};
-use crate::read::material::MATERIAL_TEMPLATE;
-use crate::read::template::{self, PermutationError, Stage};
+use crate::archive::{self, Archive, At};
+use crate::material::MATERIAL_TEMPLATE;
+use crate::template::{self, PermutationError, Stage};
 
 /// The forge files of a Riders Republic install, base before patch, in the order they are searched.
 pub const FORGES: [&str; 6] = [

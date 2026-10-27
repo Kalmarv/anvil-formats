@@ -6,9 +6,19 @@
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
-use super::archive::{Archive, At};
-pub use crate::components::stored::StoredGiDyn;
-use primase_core::{Entity, Name, World, frame::SourceFrame};
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredGiDyn {
+    pub world_id: u64,
+    pub cell_id: u32,
+    pub position: [f32; 3],
+    pub samples: u32,
+    pub probes: u32,
+    pub indoor: bool,
+    pub voxel_bounds: [[i32; 3]; 2],
+    pub subvolume_word: u32,
+    pub streams: [Vec<u8>; 4],
+    pub decoded_bytes: [u32; 3],
+}
 
 pub const GI_DYN_RESOURCE: u32 = 0xBAE9_8B30;
 const VOLUME: u32 = 0x684A_17AD;
@@ -252,34 +262,4 @@ impl StoredGiDyn {
             ]
         })
     }
-}
-
-/// Explicit single-resource read. Area readers must select cells before calling this: never load all GI by default.
-pub fn read_gi_dyn(
-    archive: &mut Archive,
-    world: &mut World,
-    at: At,
-    frame: SourceFrame,
-) -> Result<Entity, String> {
-    let name = archive
-        .forge(at.forge)
-        .and_then(|f| f.names.get(at.entry))
-        .map(|n| n.name.clone())
-        .unwrap_or_default();
-    let resource = archive.resource(at).map_err(|e| e.to_string())?;
-    if resource.type_id != GI_DYN_RESOURCE {
-        return Err(format!("GIDynResource: type {:#x}", resource.type_id));
-    }
-    let stored = StoredGiDyn::parse(&resource.body)?;
-    let entity = world.spawn();
-    world.insert(entity, Name(name));
-    world.insert(
-        entity,
-        crate::components::AnvilGiDyn {
-            index_id: resource.class_id,
-            frame,
-            stored,
-        },
-    );
-    Ok(entity)
 }

@@ -1,7 +1,7 @@
 //! A rig: the bones of a SkeletonComponent's main Skeleton and of its addon Skeletons as one tree, and the palette a
 //! Mesh's bone list makes of it.
 //!
-//! A bone is named by the CRC-32 of its name ([`StoredBone::name_hash`]), and a Mesh's bone record (`MeshBone`) names
+//! A bone is named by the CRC-32 of its name ([`crate::skeleton::StoredBone::name_hash`]), and a Mesh's bone record (`MeshBone`) names
 //! its bone the same way ([`StoredMeshBone::bone_id`]): 497,168 of the 497,194 ids of Riders Republic's 29,174 meshes
 //! with bones equal a bone of some Skeleton (tests/skin_binding.rs). So two Skeletons holding a bone of one name hold
 //! one joint. The character kit's addon Skeletons (`MAD_CHR_SkelAddon_*`) are made so: each starts at the main
@@ -32,9 +32,30 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::components::StoredSkeleton;
-pub use crate::components::{RigBone, StoredRig};
-use crate::read::mesh::StoredMeshBone;
+use crate::mesh::StoredMeshBone;
+use crate::skeleton::StoredSkeleton;
+
+/// One bone of a rig.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RigBone {
+    /// The CRC-32 of its name.
+    pub name_hash: u32,
+    /// The name of its parent bone: none for a root.
+    pub parent: Option<u32>,
+    /// LocalPosition as stored (x, y, z, 0), in its parent's space.
+    pub local_position: [f32; 4],
+    /// The local rotation as stored: a unit quaternion x, y, z, w.
+    pub local_rotation: [f32; 4],
+    /// The position in the list given to [`StoredRig::assemble`] of the Skeleton the bone is from.
+    pub skeleton: usize,
+}
+
+/// A rig (see the module documentation): each bone once, the main Skeleton's first, then each addon's new bones in the
+/// order it stores them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredRig {
+    pub bones: Vec<RigBone>,
+}
 
 /// Why Skeletons can't be joined into a rig.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -129,7 +150,7 @@ impl StoredRig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::components::StoredBone;
+    use crate::skeleton::StoredBone;
 
     fn bone(id: u64, name_hash: u32, parent: Option<u64>, x: f32) -> StoredBone {
         StoredBone {

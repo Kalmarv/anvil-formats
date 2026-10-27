@@ -3,9 +3,9 @@
 use std::collections::BTreeMap;
 use std::fs::File;
 
-use primase_anvil::read::data::read_entry;
-use primase_anvil::read::forge::Forge;
-use primase_anvil::read::objects::{Error, read_objects};
+use anvil_formats::data::read_entry;
+use anvil_formats::forge::Forge;
+use anvil_formats::objects::{Error, read_objects};
 use primase_testdata::{Game, install};
 
 /// One object: class, name, body, trailer.

@@ -1,8 +1,13 @@
 //! A StaticDDecalComponent (0x5B413085), which HoudiniDecalInstancerComponent derives from without storing more, reads by
 //! the same rule: an Entity built by hand holds one with an empty library (no model, no item), as the two of Riders
 //! Republic do, and reads its 278 bytes as stored.
-use primase_anvil::read::ddecal::{STATIC_DDECAL, StoredDeferredDecals};
-use primase_anvil::read::entity::{BOUNDING_VOLUME, ComponentBody, StoredEntity};
+use anvil_formats::ddecal::{STATIC_DDECAL, StoredDeferredDecals};
+use anvil_formats::entity::{BOUNDING_VOLUME, ComponentBody, StoredEntity};
+
+/// The component registry the body here is read with: the one type it holds.
+fn is_component_type(kind: u32) -> bool {
+    [STATIC_DDECAL].contains(&kind)
+}
 
 /// An Entity body holding one component of type `kind` with `body`.
 fn entity_with(kind: u32, body: &[u8]) -> Vec<u8> {
@@ -51,7 +56,7 @@ fn empty_library() -> Vec<u8> {
 fn a_static_ddecal_component_reads_by_the_instancers_rule() {
     let body = empty_library();
     assert_eq!(body.len(), 278);
-    let e = StoredEntity::parse(&entity_with(STATIC_DDECAL, &body)).expect("entity");
+    let e = StoredEntity::parse(&entity_with(STATIC_DDECAL, &body), is_component_type).expect("entity");
     assert_eq!(e.components.len(), 1);
     assert_eq!(e.components[0].kind, STATIC_DDECAL);
     assert_eq!(e.components[0].body, ComponentBody::Raw(body.clone()));

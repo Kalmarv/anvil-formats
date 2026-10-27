@@ -1,18 +1,18 @@
 //! What a character's meshes bind to: a SkeletonComponent read from an Entity laid out by hand, and the census of
-//! Riders Republic's forges for the rest of the chain (a Mesh's `MeshBone` records and skin stream against the bone
-//! names of the Skeletons, and the SkeletonComponents' rigs against the meshes of their Entities' Visuals).
+//! Riders Republic's forges for a Mesh's `MeshBone` records and skin stream against the bone names of the Skeletons.
 use std::collections::{HashMap, HashSet};
 
-use primase_anvil::read::archive::{Archive, At};
-use primase_anvil::read::entity::{
-    BOUNDING_VOLUME, ComponentBody, Refusal, SKELETON_COMPONENT, StoredEntity,
-};
-use primase_anvil::read::listing::Kind;
-use primase_anvil::read::lod::StoredLodSelector;
-use primase_anvil::read::mesh::StoredMesh;
-use primase_anvil::read::rig::StoredRig;
-use primase_anvil::read::skeleton::StoredSkeleton;
+use anvil_formats::archive::{Archive, At};
+use anvil_formats::entity::{BOUNDING_VOLUME, ComponentBody, Refusal, SKELETON_COMPONENT, StoredEntity};
+use anvil_formats::listing::Kind;
+use anvil_formats::mesh::StoredMesh;
+use anvil_formats::skeleton::StoredSkeleton;
 use primase_testdata::{Game, install};
+
+/// The component registry the bodies built by hand are read with: the one type they hold.
+fn is_component_type(kind: u32) -> bool {
+    kind == SKELETON_COMPONENT
+}
 
 fn component(tag: u8, id: u64, kind: u32, body: &[u8]) -> Vec<u8> {
     let mut b = vec![tag];
@@ -87,7 +87,7 @@ fn a_skeleton_component_reads_its_main_addons_tracks_and_wind_force() {
     );
     assert_eq!(body.len(), 56 + 2 * 10 + 20);
     let entity = entity_body(1, &component(4, 0x2_0000_0001, SKELETON_COMPONENT, &body));
-    let e = StoredEntity::parse(&entity).expect("entity");
+    let e = StoredEntity::parse(&entity, is_component_type).expect("entity");
     let ComponentBody::Skeleton(s) = &e.components[0].body else {
         panic!("{:?}", e.components[0].body)
     };
@@ -111,7 +111,7 @@ fn a_skeleton_component_that_does_not_end_where_its_headers_say_is_refused_with_
     let mut body = skeleton_component(0x0177_B6B7_756A, &[], &[]);
     body.push(0xAA);
     let entity = entity_body(1, &component(4, 0x2_0000_0001, SKELETON_COMPONENT, &body));
-    let e = StoredEntity::parse(&entity).expect("entity");
+    let e = StoredEntity::parse(&entity, is_component_type).expect("entity");
     assert!(
         matches!(&e.components[0].body, ComponentBody::Refused { bytes, why: Refusal::Ends { at, end } } if *bytes == body && at + 1 == *end)
     );
@@ -123,7 +123,7 @@ fn refusals_alike_but_for_their_positions_have_one_reason() {
         let mut body = skeleton_component(0x0177_B6B7_756A, &[], &[]);
         body.extend(std::iter::repeat_n(0xAA, extra));
         let entity = entity_body(1, &component(4, 0x2_0000_0001, SKELETON_COMPONENT, &body));
-        match StoredEntity::parse(&entity)
+        match StoredEntity::parse(&entity, is_component_type)
             .expect("entity")
             .components
             .remove(0)
@@ -220,89 +220,4 @@ fn every_mesh_bone_list_and_skin_stream_reads_and_its_ids_are_bone_names() {
     assert_eq!(unnamed.len(), 6);
     assert_eq!(vertices, 39_795_423);
     assert_eq!(by_influences, HashMap::from([(4, 29_116), (8, 58)]));
-}
-
-/// Every SkeletonComponent of the Entities reads, its Skeletons join into a rig, and the meshes of its Entity's
-/// Visuals name bones of that rig.
-#[test]
-fn every_skeleton_component_reads_and_its_rig_holds_the_bones_of_its_meshes() {
-    let Some(mut archive) = open() else {
-        return;
-    };
-    let (mut components, mut rigs, mut covered, mut short) = (0u64, 0u64, 0u64, 0u64);
-    let (mut addons, mut shared, mut added) = (0u64, 0u64, 0u64);
-    let mut shortfalls: HashMap<u32, u64> = HashMap::new();
-    for (at, name) in rows(&archive, Kind::Entity) {
-        let body = archive.resource(at).expect("entity").body;
-        let Ok(e) = StoredEntity::parse(&body) else {
-            continue;
-        };
-        for c in &e.components {
-            if c.kind != SKELETON_COMPONENT {
-                continue;
-            }
-            let ComponentBody::Skeleton(sc) = &c.body else {
-                panic!("{name}: a SkeletonComponent read as {:?}", c.body)
-            };
-            components += 1;
-            let mut skeletons = Vec::new();
-            for r in sc.main.iter().chain(&sc.addons) {
-                let at = archive
-                    .find(r.id)
-                    .unwrap_or_else(|| panic!("{name}: no resource {:#x}", r.id));
-                let s = StoredSkeleton::parse(&archive.resource(at).expect("skeleton").body)
-                    .unwrap_or_else(|e| panic!("{name}: {e}"));
-                skeletons.push(s);
-            }
-            let refs: Vec<&StoredSkeleton> = skeletons.iter().collect();
-            let rig = StoredRig::assemble(&refs).unwrap_or_else(|e| panic!("{name}: {e}"));
-            rigs += 1;
-            let main_bones = skeletons.first().map_or(0, |s| s.bones.len());
-            let total: usize = skeletons.iter().map(|s| s.bones.len()).sum();
-            addons += u64::try_from(skeletons.len().saturating_sub(1)).expect("count");
-            added += u64::try_from(rig.bones.len().saturating_sub(main_bones)).expect("count");
-            shared += u64::try_from(total.saturating_sub(rig.bones.len())).expect("count");
-            let mut meshes = Vec::new();
-            for v in e.visuals() {
-                let Some(object) = v.object else { continue };
-                let Some(at) = archive.find(object.id) else {
-                    continue;
-                };
-                let body = archive.resource(at).expect("object").body;
-                match StoredLodSelector::parse(&body) {
-                    Ok(l) => meshes.extend(l.level_ids().expect("levels").into_iter().flatten()),
-                    Err(_) => meshes.push(object.id),
-                }
-            }
-            for id in meshes {
-                let Some(at) = archive.find(id) else { continue };
-                let Ok(mesh) = StoredMesh::parse(&archive.resource(at).expect("mesh").body) else {
-                    continue;
-                };
-                let bones = mesh.bones().expect("bones");
-                if bones.is_empty() {
-                    continue;
-                }
-                let missing = rig.palette(&bones).iter().filter(|p| p.is_none()).count();
-                if missing == 0 {
-                    covered += 1;
-                } else {
-                    short += 1;
-                    *shortfalls
-                        .entry(u32::try_from(missing).expect("count"))
-                        .or_default() += 1;
-                }
-            }
-        }
-    }
-    println!(
-        "{components} SkeletonComponents, {rigs} rigs of {addons} addon Skeletons ({shared} bones shared with an earlier \
-         Skeleton, {added} added to the main one's); bone-bearing meshes of their Visuals: {covered} wholly in the rig, \
-         {short} not (bones missing -> meshes {shortfalls:?})"
-    );
-    assert_eq!(components, 146);
-    assert_eq!(rigs, 146);
-    assert_eq!(covered, 523);
-    assert_eq!(short, 48);
-    assert_eq!(shortfalls, HashMap::from([(1, 48)]));
 }

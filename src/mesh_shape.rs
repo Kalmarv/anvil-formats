@@ -6,7 +6,7 @@
 //! - the section run, from byte 9 for that length: consecutive sections, each a type (u16), the marker 0xECD7 (u16),
 //!   its size (i32, its 8 header bytes included), then its bytes; the sections close the run exactly;
 //! - a tail, kept as stored, which [`MeshShape::surfaces`] reads: a u16, a u32 count (0 or the face count) and that
-//!   many bytes, a u32 count n and n references ([`crate::read::reference`]), and eight f32, ending the body.
+//!   many bytes, a u32 count n and n references ([`crate::reference`]), and eight f32, ending the body.
 //!
 //! Established on two MeshShape resources of different sizes (Riders Republic build 25394987: ten sections each, in
 //! the same type order).
@@ -23,8 +23,8 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::LE;
-use crate::read::reference;
+use crate::fields::LE;
+use crate::reference;
 use primase_foundations::bytes::{Field, FieldError, View};
 
 /// A record type: equals the CRC-32 of the ASCII string `MeshShape` (the name a label).
@@ -136,7 +136,7 @@ pub struct Surfaces {
 }
 
 impl MeshShape {
-    /// A MeshShape resource's body (its [`crate::read::data::Resource::body`]).
+    /// A MeshShape resource's body (its [`crate::data::Resource::body`]).
     pub fn parse(body: &[u8]) -> Result<MeshShape, Error> {
         let [first, second, z0, z1, z2] = View::new(body).array::<5>(0).field("prefix")?;
         if first != 1 {
@@ -230,7 +230,7 @@ impl MeshShape {
     /// edge's face ids the faces that name it (two for an edge between faces, one and [`NO_FACE`] for a boundary
     /// edge). Nothing is converted: positions are as stored, in the shape's own units and frame.
     /// The tail read: a u16, a u32 count that is 0 or the face count and that many bytes (each face's index into the
-    /// references), a u32 count and that many references ([`crate::read::reference`]), and eight f32, ending the
+    /// references), a u32 count and that many references ([`crate::reference`]), and eight f32, ending the
     /// tail. Every MeshShape of Riders Republic reads so in the census, its face bytes each below the reference count
     /// (CollisionMaterials on every one resolved); what the u16 and the eight f32 hold is kept, not read.
     pub fn surfaces(&self) -> Result<Surfaces, Error> {

@@ -21,7 +21,7 @@
 //!   rightward, every sample from the second row on plus the one above it (in index order), every row rightward.
 //!
 //! The coding is the Riders Republic notes' (docs/terrain.md §3.2, from their reading of the game's decoder),
-//! measured on every node of MAD_USNAT by the census here (worlds/anvil/tests/tnl.rs): what it checks is stored or
+//! measured on every node of MAD_USNAT by the census here (tests/tnl.rs): what it checks is stored or
 //! neighbouring values the decoding doesn't use, each B's length, each raster's palette and the node's mask, each
 //! node's stored height range, and the 4 samples every node shares with its neighbours.
 #![deny(

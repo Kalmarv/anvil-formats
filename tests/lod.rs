@@ -3,12 +3,12 @@
 //! resolving within the forge to a Mesh record.
 use std::fs::File;
 
-use primase_anvil::read::data::{Resource, read_entry};
-use primase_anvil::read::forge::Forge;
-use primase_anvil::read::lod::{LOD_SELECTOR, StoredLodSelector};
-use primase_anvil::read::mesh::MESH;
-use primase_anvil::read::reference::Reference;
-use primase_anvil::read::shapes::MAX_RECORD;
+use anvil_formats::archive::MAX_RECORD;
+use anvil_formats::data::{Resource, read_entry};
+use anvil_formats::forge::Forge;
+use anvil_formats::lod::{LOD_SELECTOR, StoredLodSelector};
+use anvil_formats::mesh::MESH;
+use anvil_formats::reference::Reference;
 use primase_testdata::{Game, install_file};
 
 #[test]

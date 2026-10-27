@@ -1,10 +1,9 @@
 //! A TextureMap resource's body: its size, format code, mip count, references to its external mips, and the mip
-//! levels it holds itself, read as stored. Pixels are not decoded here (`primase-texcodec` decodes a level once its
+//! levels it holds itself, read as stored. Pixels are not decoded here (a BCn decoder decodes a level once its
 //! format is known); colour space and role are not read.
 //!
 //! Width, height, mip count, format code and the references are established by the fixtures: the levels they give
-//! fill the pixels exactly, the referenced CompiledMips are exactly the missing levels' sizes, and the levels decode
-//! (worlds/anvil/tests/texture.rs). The u32s at 9, 13 and 21 are read by the reference tool's names, depth, array size
+//! fill the pixels exactly, the referenced CompiledMips are exactly the missing levels' sizes, and the levels decode. The u32s at 9, 13 and 21 are read by the reference tool's names, depth, array size
 //! and dimension (1 flat, 2 cube, 3 volume; another is refused): with `layers = depth x array size x (6 for a cube)`
 //! each level holds its layers in turn, and the pixels are exactly the layers times the levels' sizes on every one of
 //! Riders Republic's 25 cube and volume maps (the Riders Republic notes, docs/texture-formats.md, the 49 refused maps;
@@ -28,25 +27,24 @@
 //! it: another first byte, u32 at 9, 13 or 21, reference tag or compiled header marker, a compiled header
 //! disagreeing with the first, or pixels not ending the body. [`StoredTextureMap::levels`] slices the levels for
 //! the format codes whose storage the census establishes ([`storage`]), refusing another code or pixels the levels
-//! don't fill; [`format`] names the codec only for the codes whose codec is established.
+//! don't fill; [`format()`] names the codec only for the codes whose codec is established.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::LE;
-use primase_core::TexFormat;
+use crate::fields::LE;
 use primase_foundations::bytes::{Cursor, Field, FieldError};
 
-pub use crate::read::material::TEXTURE_MAP;
+pub use crate::material::TEXTURE_MAP;
 
 /// The compiled header's marker: equals the CRC-32 of `CompiledTextureMap` (the name a label).
 pub const COMPILED_TEXTURE_MAP: u32 = 0x1323_7FE9;
 
 /// The texture format a TextureMap's engine format code names, for the codes established by two third-party tools
 /// agreeing (AnvilToolkit 1.3.7's Breakpoint table and RRAssetStudio v3's) with the census's storage, and by a real
-/// sample decoding by primase-texcodec equal to the third-party bcdec's on every byte (worlds/anvil/tests/texture.rs):
+/// sample's decoding equal to the third-party bcdec's on every byte:
 /// 2 and 3 BC1, 4 BC2, 5 BC3, 6 BC4, 7 BC5, 10 BC7, 12 R8, 20 RGBA16F (BC7 also equal to texture2ddecoder's; BC2, R8
 /// and RGBA16F also to RRAssetStudio's). 0 is B8G8R8A8, where the two tools disagree (BGRA8 or RGBA8), by what the
 /// game's own data means: the engine's built-in default normal texture (DataPC entry 139325) stores `ff 80 80 ff`, a
@@ -55,29 +53,61 @@ pub const COMPILED_TEXTURE_MAP: u32 = 0x1323_7FE9;
 /// in a memory snapshot of the game gives DXGI format 65 (A8_UNORM) to the one TextureMap of its size and mip count,
 /// a code-11 map (the notes, docs/texture-formats.md). 1 is R8G8B8A8_SNORM, 8 BC6H unsigned and 9 BC6H signed:
 /// AnvilToolkit's table names them (RRAssetStudio's reader refuses them), and the content agrees, the rule for these
-/// three Caleb's (content evidence counts): read as signed bytes the code-1 noise map is exactly Perlin's gradient
+/// three being that content evidence counts: read as signed bytes the code-1 noise map is exactly Perlin's gradient
 /// table (12 cube-edge directions, two components of +-127 and one 0 on all 256 pixels), and the code-8 and 9 maps'
 /// 2,066,602 blocks are valid BC6H on every one and decode to coherent images (the notes, docs/texture-formats.md,
 /// the 49 refused maps). Colour space and role are not read:
 /// neither tool's table holds an sRGB format. Another code is `None`: not refused as stored, but its codec isn't
 /// established.
-pub fn format(code: u32) -> Option<TexFormat> {
+pub fn format(code: u32) -> Option<Format> {
     match code {
-        0 => Some(TexFormat::Bgra8Unorm),
-        1 => Some(TexFormat::Rgba8Snorm),
-        2 | 3 => Some(TexFormat::Bc1),
-        4 => Some(TexFormat::Bc2),
-        5 => Some(TexFormat::Bc3),
-        6 => Some(TexFormat::Bc4Unorm),
-        7 => Some(TexFormat::Bc5Unorm),
-        8 => Some(TexFormat::Bc6hUfloat),
-        9 => Some(TexFormat::Bc6hSfloat),
-        10 => Some(TexFormat::Bc7),
-        11 => Some(TexFormat::A8Unorm),
-        12 => Some(TexFormat::R8Unorm),
-        20 => Some(TexFormat::Rgba16Float),
+        0 => Some(Format::Bgra8Unorm),
+        1 => Some(Format::Rgba8Snorm),
+        2 | 3 => Some(Format::Bc1),
+        4 => Some(Format::Bc2),
+        5 => Some(Format::Bc3),
+        6 => Some(Format::Bc4Unorm),
+        7 => Some(Format::Bc5Unorm),
+        8 => Some(Format::Bc6hUfloat),
+        9 => Some(Format::Bc6hSfloat),
+        10 => Some(Format::Bc7),
+        11 => Some(Format::A8Unorm),
+        12 => Some(Format::R8Unorm),
+        20 => Some(Format::Rgba16Float),
         _ => None,
     }
+}
+
+/// A texel format a TextureMap's format code names ([`format()`]), in DXGI's terms. The code says nothing of colour
+/// space, so each is named by its non-sRGB variant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Format {
+    /// B8G8R8A8_UNORM.
+    Bgra8Unorm,
+    /// R8G8B8A8_SNORM.
+    Rgba8Snorm,
+    /// BC1_UNORM.
+    Bc1,
+    /// BC2_UNORM.
+    Bc2,
+    /// BC3_UNORM.
+    Bc3,
+    /// BC4_UNORM.
+    Bc4Unorm,
+    /// BC5_UNORM.
+    Bc5Unorm,
+    /// BC6H_UF16.
+    Bc6hUfloat,
+    /// BC6H_SF16.
+    Bc6hSfloat,
+    /// BC7_UNORM.
+    Bc7,
+    /// A8_UNORM.
+    A8Unorm,
+    /// R8_UNORM.
+    R8Unorm,
+    /// R16G16B16A16_FLOAT.
+    Rgba16Float,
 }
 
 /// How a format code's levels are stored: bytes per 4x4 block, or bytes per pixel.
@@ -100,9 +130,9 @@ impl Storage {
 
 /// How a format code's levels are stored, for the codes where every TextureMap of Riders Republic (build 25394987)
 /// with that code fills its held levels exactly in this one class and in no other of the five measured (8 and 16 bytes
-/// per block; 1, 4 and 8 bytes per pixel; worlds/anvil/tests/census.rs): 2, 3, 6 (8 per block); 4, 5, 7, 10 (16 per
+/// per block; 1, 4 and 8 bytes per pixel; a census): 2, 3, 6 (8 per block); 4, 5, 7, 10 (16 per
 /// block); 11, 12 (1 per pixel); 0, 15 (4 per pixel; 14 of code 0's 344 and 1 of code 15's 4 fill none, and are
-/// refused); 20 (8 per pixel). This is the storage only: which codec a code is ([`format`]) the bytes don't say.
+/// refused); 20 (8 per pixel). This is the storage only: which codec a code is ([`format()`]) the bytes don't say.
 pub fn storage(code: u32) -> Option<Storage> {
     match code {
         2 | 3 | 6 => Some(Storage::Blocks(8)),
@@ -147,7 +177,7 @@ pub struct MipReference {
 pub struct StoredTextureMap {
     pub width: u32,
     pub height: u32,
-    /// The engine's format code ([`format`]).
+    /// The engine's format code ([`format()`]).
     pub format: u32,
     /// The u32s at 9, 13 and 21: depth, array size and dimension (the reference tool's names).
     pub depth: u32,

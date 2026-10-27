@@ -1,6 +1,6 @@
 //! A forge archive's index: a `.forge` file of version 26 or 27 opened, its headers and its one FileSet's index and
 //! name tables read as stored, and every entry's payload located (offset and size in the file; payloads are not read
-//! or decoded here: [`crate::read::data`] decodes their blocks).
+//! or decoded here: [`crate::data`] decodes their blocks).
 //!
 //! Layout (little-endian; offsets in bytes; version 26 where it differs, as Shaun White Skateboarding's PC forges
 //! store it, AnvilToolkit's version-25 reader being the third-party reading of the same layout):
@@ -34,7 +34,7 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::LE;
+use crate::fields::LE;
 use primase_foundations::bytes::{Cursor, Field, FieldError};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -361,7 +361,7 @@ impl Forge {
 
     /// Entry `k`'s payload bytes as stored (its index record's size of them, at its offset; in version 26 after its
     /// FILEDATA header, which is checked against the entry's records), from the forge `r` this index was read from;
-    /// [`crate::read::data::read_entry`] reads its blocks.
+    /// [`crate::data::read_entry`] reads its blocks.
     pub fn payload<R: Read + Seek>(&self, r: &mut R, k: usize) -> Result<Vec<u8>, Error> {
         let (Some(e), Some(n)) = (self.index.get(k), self.names.get(k)) else {
             return Err(Error::Count {

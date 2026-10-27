@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::io::Cursor;
 
-use primase_anvil::read::forge::{Error, Forge};
+use anvil_formats::forge::{Error, Forge};
 use primase_testdata::{Game, install_file};
 
 /// One entry of a hand-laid forge: payload offset, index id, size, name id, type id, name.

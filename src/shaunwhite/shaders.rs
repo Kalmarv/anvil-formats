@@ -1,8 +1,8 @@
 //! Uncompressed SDB2 version 39 shader databases (`ekshadersPC*.bin`).
 //!
 //! Header: `SDB2`, version, source count, active record count, source offset, table offset (six u32).
-//! Each source is name[64], CRC-32, byte length, dependency[4], then the source bytes. A table row is
-//! kind, permutation[2], dependency mask[4], payload offset and size. The unused table reserve is zero.
+//! Each source is name\[64\], CRC-32, byte length, dependency\[4\], then the source bytes. A table row is
+//! kind, permutation\[2\], dependency mask\[4\], payload offset and size. The unused table reserve is zero.
 //! Payloads tile in table order, including retained zero-length records; no gap, overlap or trailer is accepted.
 //!
 //! Effect/state-only payloads begin with 48 bytes: BEEF u16, six count/reserved bytes, vertex/pixel byte lengths,
@@ -18,12 +18,103 @@
 
 use std::collections::BTreeSet;
 
-use iridia_interface::Stage;
 use primase_foundations::bytes::{Cursor, Endian, Field, FieldError, View, checked_span};
 
-use crate::shaders::{Database, Effect, Key, Payload, Record, SamplerBinding, Source, State};
-
 const LE: Endian = Endian::Little;
+
+/// The shader stage a stored program is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Stage {
+    Vertex,
+    Pixel,
+}
+
+/// A source file with its original line endings, CRC-32 and 128-bit dependency identity.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Source {
+    pub name: String,
+    pub crc32: u32,
+    pub dependency: [u32; 4],
+    pub bytes: Vec<u8>,
+}
+
+/// A table key: kind 4 is a compiled effect, 5..7 utility stages, 8 a state-only pass.
+/// The low six permutation bits select the template; the remaining bits are that template's defines.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Key {
+    pub kind: u32,
+    pub permutation: u64,
+    pub dependencies: [u32; 4],
+}
+
+/// A stored D3D9 state and its raw value (enum, bool, bit mask or float bits according to the state).
+/// No destination render-state interpretation is made here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct State {
+    pub kind: u32,
+    pub value: u32,
+}
+
+/// A named sampler and its named texture parameter, with the packed native address and sampler states.
+/// In the shipped PC databases the packed address is `0x00800000 | pixel_sampler_slot`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SamplerBinding {
+    pub sampler: String,
+    pub texture: String,
+    pub address: u32,
+    pub states: Vec<State>,
+}
+
+/// A compiled pass's header and all metadata following its bytecode.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Effect {
+    /// Raw SM3 vertex and pixel programs, as stored (not checked to be complete programs). A state-only record has
+    /// neither.
+    pub vertex: Option<Vec<u8>>,
+    pub pixel: Option<Vec<u8>>,
+    /// Native per-stage cache identities, as stored. Their hash algorithm is not inferred.
+    pub vertex_key: u64,
+    pub pixel_key: u64,
+    /// Assignments made on pass entry.
+    pub states: Vec<State>,
+    /// States saved on entry and restored on exit. Values here are the stored initial placeholders, not assignments.
+    pub restore_states: Vec<State>,
+    pub samplers: Vec<SamplerBinding>,
+    /// The header's second sampler-binding group, encoded identically. Empty in the shipped PC databases.
+    pub additional_samplers: Vec<SamplerBinding>,
+    /// Ordered names of effect variables that drive render state. Kept separate from literal assignments.
+    pub variables: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Payload {
+    /// A retained key with no compiled data. This is not a zero-byte shader.
+    Missing,
+    Effect(Effect),
+    /// Raw utility stage (kinds 5..7). Stage meaning follows the token version, not a guess from its role.
+    Program {
+        stage: Stage,
+        bytes: Vec<u8>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Record {
+    pub key: Key,
+    /// File offset, including zero-length entries' positions.
+    pub offset: u32,
+    pub bytes: u32,
+    pub payload: Payload,
+}
+
+/// An uncompressed version-39 SDB2, in source/table order. No quality level is chosen by the reader.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Database {
+    pub sources: Vec<Source>,
+    pub records: Vec<Record>,
+    /// The zeroed reserve between the active record table and the first payload, in bytes.
+    pub table_padding: usize,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -145,23 +236,6 @@ impl<'a> Reader<'a> {
     }
 }
 
-fn raw(bytes: &[u8], at: usize, expected: Stage) -> Result<Vec<u8>> {
-    let (stage, program) =
-        iridia_d3d9::frame(bytes).map_err(|e| invalid(at, "stage bytecode", e.to_string()))?;
-    if stage != expected || program.len() != bytes.len() {
-        return Err(invalid(
-            at,
-            "stage bytecode",
-            format!(
-                "{stage:?}, {} of {} bytes; expected complete {expected:?}",
-                program.len(),
-                bytes.len()
-            ),
-        ));
-    }
-    Ok(program.to_vec())
-}
-
 fn effect(bytes: &[u8], origin: usize, state_only: bool) -> Result<Effect> {
     let mut r = Reader::new(bytes, origin);
     if r.c.u16(LE).field("effect tag")? != 0xbeef {
@@ -194,17 +268,15 @@ fn effect(bytes: &[u8], origin: usize, state_only: bool) -> Result<Effect> {
             "stage bytecode or stage cache key present",
         ));
     }
-    let at = r.at();
     let vertex = if nv == 0 {
         None
     } else {
-        Some(raw(r.bytes(nv, "vertex program")?, at, Stage::Vertex)?)
+        Some(r.bytes(nv, "vertex program")?.to_vec())
     };
-    let at = r.at();
     let pixel = if np == 0 {
         None
     } else {
-        Some(raw(r.bytes(np, "pixel program")?, at, Stage::Pixel)?)
+        Some(r.bytes(np, "pixel program")?.to_vec())
     };
     let states = r.states(states.into())?;
     let restore_states = r.states(restore.into())?;
@@ -227,8 +299,9 @@ fn effect(bytes: &[u8], origin: usize, state_only: bool) -> Result<Effect> {
     })
 }
 
-/// Read a complete uncompressed SDB2 v39 database. Raw stage programs are framed, not lifted; an operation
-/// outside a lifter's subset remains bytecode. Source CRCs, identities, all spans, reserves and tails are checked.
+/// Read a complete uncompressed SDB2 v39 database. Source CRCs, identities, all spans, reserves and tails are checked.
+/// Stage programs are kept as stored, tagged with their stage by where the record puts them: the bytes are not checked
+/// to be a complete SM3 program of that stage, which a caller that runs or translates them does.
 pub fn read(bytes: &[u8]) -> Result<Database> {
     let mut h = Reader::new(bytes, 0);
     if h.bytes(4, "SDB2 magic")? != b"SDB2" {
@@ -395,11 +468,11 @@ pub fn read(bytes: &[u8]) -> Result<Database> {
                 4 | 8 => Payload::Effect(effect(data, at, record.key.kind == 8)?),
                 5 => Payload::Program {
                     stage: Stage::Vertex,
-                    bytes: raw(data, at, Stage::Vertex)?,
+                    bytes: data.to_vec(),
                 },
                 6 | 7 => Payload::Program {
                     stage: Stage::Pixel,
-                    bytes: raw(data, at, Stage::Pixel)?,
+                    bytes: data.to_vec(),
                 },
                 _ => return Err(invalid(at, "record kind", "unhandled record")),
             }
@@ -411,12 +484,4 @@ pub fn read(bytes: &[u8]) -> Result<Database> {
         records,
         table_padding: padding.len(),
     })
-}
-
-/// Attach a chosen database as `shaunwhite.shader_library`, replacing a prior one. A failure leaves the world
-/// unchanged. The caller chooses the quality file; no path, quality policy, binding or permutation is inferred.
-pub fn read_into(world: &mut primase_core::World, bytes: &[u8]) -> Result<()> {
-    let database = read(bytes)?;
-    world.insert_resource(crate::components::ShaderLibrary(std::sync::Arc::new(database)));
-    Ok(())
 }

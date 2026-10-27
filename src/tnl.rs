@@ -12,7 +12,7 @@
 //!
 //! The grammars are the Riders Republic notes' (docs/terrain.md §3, consumed exactly on every node of MAD_USNAT), the
 //! quadtree order theirs (each node's a and b against the FloorHeightData cells under it, Spearman 0.96 to 1.00 per
-//! level, other orders -0.65 or less). Blocks 0 and 2 to 7 are coded (see [`crate::read::tnl_code`]); blocks 1 and 8
+//! level, other orders -0.65 or less). Blocks 0 and 2 to 7 are coded (see [`crate::tnl_code`]); blocks 1 and 8
 //! are LZ4 blocks of planar BC1 and BC4 tiles.
 #![deny(
     clippy::arithmetic_side_effects,
@@ -20,7 +20,7 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::{BodyError, LE, body_error, check, end};
+use crate::fields::{BodyError, LE, body_error, check, end};
 use primase_foundations::bytes::{Cursor, Field};
 
 /// A record type: the CRC-32 of `TerrainNodeLayer`.

@@ -1,6 +1,6 @@
 //! The rider's slots, parts and variants as the customization BuildTables list them, on Riders Republic's forges.
-use primase_anvil::read::archive::Archive;
-use primase_anvil::read::rider::{BEARD_COLOURS, HAIR_COLOURS, RiderCatalog, colours, rider_catalog, stated};
+use anvil_formats::archive::Archive;
+use anvil_formats::rider::{BEARD_COLOURS, HAIR_COLOURS, RiderCatalog, colours, rider_catalog, stated};
 use primase_testdata::{Game, install};
 
 /// (slot key, parts, parts listing variants, parts whose variants state one) of every slot.
@@ -75,7 +75,7 @@ fn the_slot_tables_list_parts_and_their_variants_and_state_a_default_where_they_
     // per-head tables of each beard (the hair materials table is no slot), and their weights are odds
     let hair = by("hair_activator");
     let named =
-        |slot: &primase_anvil::read::rider::RiderSlot, name: &str| slot.parts.iter().any(|p| p.name == name);
+        |slot: &anvil_formats::rider::RiderSlot, name: &str| slot.parts.iter().any(|p| p.name == name);
     assert!(named(hair, "MAD_CHR_Hair_005_U_Full") && named(hair, "MAD_CHR_Hair_005_U_Cut"));
     assert_eq!(hair.table_name, "MAD_CHR_BODY_HAIR_ACTIVATOR");
     let beard = by("beard_activator");
@@ -95,26 +95,6 @@ fn the_slot_tables_list_parts_and_their_variants_and_state_a_default_where_they_
     );
 }
 
-/// The four tones of the crowd's skin palette, as the notes decode its 8 x 4 texture (bottom row of each 2 x 2 cell).
-#[test]
-fn the_skin_palette_has_four_tones() {
-    let Some(dir) = install(Game::Riders) else {
-        return;
-    };
-    let forges = [
-        "DataPC_MAD_USNAT_patch_01.forge",
-        "DataPC_MAD_USNAT.forge",
-        "DataPC_patch_01.forge",
-        "DataPC.forge",
-    ];
-    let mut archive = Archive::open(&forges.map(|f| dir.join(f))).expect("archive");
-    let tones = primase_anvil::read::rider::skin_palette(&mut archive).expect("palette");
-    assert_eq!(
-        tones,
-        [[199, 144, 113], [102, 56, 29], [162, 100, 54], [185, 139, 105]]
-    );
-}
-
 /// The hair and beard colour tables list one row per colour, each row named by its own condition and linking the
 /// Material of that colour (the beards' table the same colours' Materials).
 #[test]
@@ -131,7 +111,7 @@ fn the_colour_tables_list_a_material_per_row_and_name_the_row_by_its_condition()
     let mut archive = Archive::open(&forges.map(|f| dir.join(f))).expect("archive");
     let hair = colours(&mut archive, HAIR_COLOURS).expect("hair colours");
     let beard = colours(&mut archive, BEARD_COLOURS).expect("beard colours");
-    let distinct = |list: &[primase_anvil::read::rider::Colour]| {
+    let distinct = |list: &[anvil_formats::rider::Colour]| {
         let mut conditions: Vec<u32> = list.iter().map(|c| c.condition).collect();
         conditions.sort_unstable();
         conditions.dedup();

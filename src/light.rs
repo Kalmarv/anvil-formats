@@ -1,11 +1,20 @@
 //! WhiteRoom SpotLight records. Offsets established in riders-republic/docs/lighting.md §2. Stored intensity
-//! units and shadow booleans remain source data; a lowering must state its calibration.
+//! units and shadow booleans remain source data; a caller must state its calibration.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
-pub use crate::components::stored::StoredSpotLight;
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredSpotLight {
+    pub color: [f32; 4],
+    pub intensity: f32,
+    pub luminance: f32,
+    pub inner: f32,
+    pub outer: f32,
+    pub range: f32,
+    pub near: f32,
+}
 pub const SPOT_LIGHT: u32 = 0x8032_0FB8;
 
 impl StoredSpotLight {

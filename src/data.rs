@@ -25,7 +25,7 @@
 use primase_foundations::bytes::{Field, FieldError, View};
 use primase_foundations::compress::{Decompressor, Lzo2a, Zstd};
 
-use crate::read::fields::LE;
+use crate::fields::LE;
 
 /// A data block's first bytes.
 pub const BLOCK_MAGIC: u64 = 0x1004_FA99_57FB_AA33;

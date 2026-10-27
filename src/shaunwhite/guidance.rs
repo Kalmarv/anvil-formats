@@ -132,7 +132,32 @@ pub struct Edge {
     pub length: f32,
 }
 
-pub use crate::components::GuidanceClass as Class;
+/// The four guidance classes the game stores (read by [`crate::shaunwhite::guidance`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Class {
+    /// SWSkateGuidanceSystem.
+    Plain,
+    /// SWSkateFreeFormGuidanceSystem: the shaping mechanic's placed grind rails.
+    FreeForm,
+    /// SWSkateScaleGuidanceSystem.
+    Scale,
+    /// SWSkateMorphGuidanceSystem.
+    Morph,
+}
+
+impl Class {
+    pub const ALL: [Class; 4] = [Class::Plain, Class::FreeForm, Class::Scale, Class::Morph];
+
+    /// The game's class name.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Class::Plain => "SWSkateGuidanceSystem",
+            Class::FreeForm => "SWSkateFreeFormGuidanceSystem",
+            Class::Scale => "SWSkateScaleGuidanceSystem",
+            Class::Morph => "SWSkateMorphGuidanceSystem",
+        }
+    }
+}
 
 impl Class {
     /// The class hash of the component.
@@ -179,7 +204,7 @@ pub struct GuidanceSystem {
     /// Local frame, metres.
     pub points: Vec<[f32; 3]>,
     pub shaping: Shaping,
-    /// Links the system's own edges hold that name nothing ([`check_edges`]), read as [`NO_LINK`].
+    /// Links the system's own edges hold that name nothing (`check_edges`), read as [`NO_LINK`].
     pub stale_links: usize,
     /// Where the component ends in the body: the next component's first byte.
     pub end: usize,

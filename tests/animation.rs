@@ -3,8 +3,8 @@
 //! gives.
 use std::collections::BTreeMap;
 
-use primase_anvil::read::animation::{ANIMATION, StoredAnimation};
-use primase_anvil::read::archive::{Archive, At};
+use anvil_formats::animation::{ANIMATION, StoredAnimation};
+use anvil_formats::archive::{Archive, At};
 use primase_testdata::{Game, install};
 
 #[test]
@@ -74,9 +74,9 @@ fn every_animation_reads_to_its_last_byte() {
 fn the_values_and_times_of_every_track_of_a_kind_read_decode() {
     use std::collections::{HashMap, HashSet};
 
-    use primase_anvil::read::animation::Values;
-    use primase_anvil::read::listing::Kind;
-    use primase_anvil::read::skeleton::StoredSkeleton;
+    use anvil_formats::animation::Values;
+    use anvil_formats::listing::Kind;
+    use anvil_formats::skeleton::StoredSkeleton;
 
     let Some(dir) = install(Game::Riders) else {
         return;
@@ -144,7 +144,7 @@ fn the_values_and_times_of_every_track_of_a_kind_read_decode() {
             }
             let values = match t.values() {
                 Ok(v) => v,
-                Err(primase_anvil::read::animation::Error::Unread { kind }) => {
+                Err(anvil_formats::animation::Error::Unread { kind }) => {
                     *unread.entry(kind).or_default() += 1;
                     continue;
                 }

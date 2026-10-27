@@ -2,12 +2,10 @@
 //! build 25394987; games/riders-republic docs/recon/material-reference-envelope.md, e244d10).
 use std::fs::File;
 
-use primase_anvil::read::data::{Resource, read_entry};
-use primase_anvil::read::forge::Forge;
-use primase_anvil::read::material::{
-    MATERIAL, MATERIAL_TEMPLATE, StoredReferences, TEXTURE_MAP, TEXTURE_SET,
-};
-use primase_anvil::read::shapes::MAX_RECORD;
+use anvil_formats::archive::MAX_RECORD;
+use anvil_formats::data::{Resource, read_entry};
+use anvil_formats::forge::Forge;
+use anvil_formats::material::{MATERIAL, MATERIAL_TEMPLATE, StoredReferences, TEXTURE_MAP, TEXTURE_SET};
 use primase_testdata::{Game, install_file};
 
 #[test]
@@ -86,7 +84,7 @@ fn a_texture_set_reads_all_19_references() {
         .expect("payload");
     let block = read_entry(&payload, MAX_RECORD).expect("entry");
     let r = Resource::parse(&block.resource.data).expect("resource");
-    let t = primase_anvil::read::material::StoredTextureSet::parse(&r.body).expect("texture set");
+    let t = anvil_formats::material::StoredTextureSet::parse(&r.body).expect("texture set");
     let ids: Vec<Option<u64>> = t.references.iter().map(|x| x.map(|x| x.id)).collect();
     assert_eq!(ids[..2], [Some(0x01D3_970D_C221), Some(0x01D3_970D_C22A)]);
 }
@@ -96,7 +94,7 @@ fn a_texture_set_reads_all_19_references() {
 /// of the same forge.
 #[test]
 fn a_material_reads_its_property_records() {
-    use primase_anvil::read::material::{Payload, StoredMaterial};
+    use anvil_formats::material::{Payload, StoredMaterial};
     let Some(path) = install_file(Game::Riders, "DataPC_MAD_WhiteRoom.forge") else {
         return;
     };

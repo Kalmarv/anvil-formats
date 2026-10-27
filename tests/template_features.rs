@@ -1,4 +1,4 @@
-//! A template's feature flags (`read::template::feature_node`, the body of its shader-state node) against the
+//! A template's feature flags (`template::feature_node`, the body of its shader-state node) against the
 //! ShaderKeys it stores, on all 432 MaterialTemplates of the six forges (Riders Republic build 25394987): the
 //! engine's key composer (docs/shaders.md §6.2) sets a key bit only where the template's feature word `T` allows it,
 //! and a template stores the permutations its flags can reach, so the byte of feature n (byte n + 1 of the node)
@@ -10,12 +10,12 @@
 //! A feature is set where its byte is not 0. The bytes are 0 or 1 but for feature 15, whose byte is 2 on 82 of the
 //! templates (on those with the pass, 22 have 1, 82 have 2 and 228 have 0, and key bit `0x80` is stored exactly where
 //! it is 1 or 2). The test holds the byte of every feature a key rule asks for to 0 or 1 (feature 15: 0, 1 or 2) and
-//! the templates to the gates, and prints the counts. Every template's tables pass [`AnvilShaders::check`] too.
+//! the templates to the gates, and prints the counts. Every template's tables pass [`ShaderTables::check`] too.
 //!
-//! [`AnvilShaders::check`]: primase_anvil::components::AnvilShaders::check
+//! [`ShaderTables::check`]: anvil_formats::template::ShaderTables::check
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
-use primase_anvil::read::archive::{Archive, At};
-use primase_anvil::read::template::{self, MATERIAL_TEMPLATE};
+use anvil_formats::archive::{Archive, At};
+use anvil_formats::template::{self, MATERIAL_TEMPLATE};
 use primase_testdata::{Game, install};
 
 #[test]

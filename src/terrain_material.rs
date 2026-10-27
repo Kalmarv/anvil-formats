@@ -1,6 +1,6 @@
 //! A terrain's material bank and its materials: TerrainMaterialBank, the list a terrain node's material raster
 //! (block 2) indexes, and TerrainMaterial, each one's CollisionMaterial. Little-endian; a reference is
-//! [`crate::read::reference`]'s.
+//! [`crate::reference`]'s.
 //!
 //! - **TerrainMaterialBank:** `01`, a u32 count and that many references (TextureSets), a u32 count and that many
 //!   references (TerrainMaterials), a u32 count and that many references (region objects), one reference (a
@@ -12,7 +12,7 @@
 //!   CollisionMaterial, at 198 a u32 (its position in the bank, by the notes).
 //!
 //! The grammars are the Riders Republic notes' (docs/terrain.md §4 and §3.4: TMB_MAD consumed exactly; 202 bytes on
-//! every TerrainMaterial), read on every one of the game's by the census (worlds/anvil/tests/census.rs). That a node's
+//! every TerrainMaterial), read on every one of the game's by a census. That a node's
 //! raster value indexes the bank's TerrainMaterials in stored order is theirs too (each value's mean colour and slope
 //! against its material's name, over 87 million samples). The rest of a TerrainMaterial isn't read.
 #![deny(
@@ -21,8 +21,8 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::{BodyError, LE, body_error, count, end, reference};
-use crate::read::reference::{self, Reference};
+use crate::fields::{BodyError, LE, body_error, count, end, reference};
+use crate::reference::{self, Reference};
 use primase_foundations::bytes::{Cursor, Field, View};
 
 /// A record type: the CRC-32 of `TerrainMaterialBank`.

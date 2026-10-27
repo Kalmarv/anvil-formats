@@ -1,5 +1,5 @@
-//! Several forges read as one: a ClassID is looked up in each, in the order the program gives them, and the first
-//! that holds it answers. Which copy wins where a base and its patch both hold an id is the program's stated choice
+//! Several forges read as one: a ClassID is looked up in each, in the order the caller gives them, and the first
+//! that holds it answers. Which copy wins where a base and its patch both hold an id is the caller's choice
 //! (the Riders Republic notes find the patch's copy differing only in some LODSelectors' flags, TextureMapSpecs and a
 //! few others, and lead to "the patch wins"; that is not established from the game), so nothing here orders them.
 #![allow(
@@ -11,9 +11,11 @@
 use std::fs::File;
 use std::path::Path;
 
-use crate::read::data::{Resource, read_entry};
-use crate::read::forge::Forge;
-use crate::read::shapes::MAX_RECORD;
+use crate::data::{Resource, read_entry};
+use crate::forge::Forge;
+
+/// A decoded resource's largest size the archive accepts (the forge's own sizes are checked).
+pub const MAX_RECORD: usize = 64 << 20;
 
 /// Why an archive can't be opened or an entry read.
 #[derive(Debug, thiserror::Error)]
@@ -21,7 +23,7 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
-    Forge(#[from] crate::read::forge::Error),
+    Forge(#[from] crate::forge::Error),
     #[error("no forge {0} in the archive")]
     NoForge(usize),
     #[error("forge {forge}, entry {entry}: {source}")]
@@ -29,7 +31,7 @@ pub enum Error {
         forge: usize,
         entry: usize,
         #[source]
-        source: crate::read::data::Error,
+        source: crate::data::Error,
     },
 }
 

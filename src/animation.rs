@@ -3,7 +3,7 @@
 //! ([`StoredTrack::values`] are bytes); where the clip's key times fall in seconds isn't either.
 //!
 //! The resource's own header is longer than other types': its file-header byte is 1 and a table follows it
-//! ([`crate::read::data::Resource::header_rows`]). The body (little-endian; the registry's field order, from the
+//! ([`crate::data::Resource::header_rows`]). The body (little-endian; the registry's field order, from the
 //! `Animation` class, checked on every clip):
 //! - a byte (1 on all); `Length` (f32); `F4F597FF` and `322B96B8` (u32 each: the first varies by clip, the second is 0
 //!   on all);
@@ -67,10 +67,114 @@
     clippy::cast_possible_truncation
 )]
 
-pub use crate::components::{
-    AnimationError as Error, StoredAnimation, StoredEcl, StoredEvents, StoredTrack, Times, Values,
-};
-use crate::read::fields::{BodyError, LE, count, expect};
+use crate::fields::{BodyError, LE, count, expect};
+use primase_foundations::bytes::Field;
+
+/// Why an Animation body or a track's values can't be read.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("animation body: {0}")]
+    Short(#[from] primase_foundations::bytes::FieldError),
+    #[error("animation {what}: {found:#x} at {at}, not {read}")]
+    Value {
+        what: &'static str,
+        at: usize,
+        found: u64,
+        read: &'static str,
+    },
+    #[error("animation reference at {at}: {why}")]
+    Reference { at: usize, why: String },
+    #[error("animation track {track}: tag {tag:#04x} is kind {kind}, whose value width isn't read")]
+    Kind { track: usize, tag: u8, kind: u8 },
+    #[error("animation track {track}: {why}")]
+    Track { track: usize, why: String },
+    #[error("animation tracks of kind {kind}: their values aren't read")]
+    Unread { kind: u8 },
+    #[error("animation track values: {0}")]
+    Values(String),
+    #[error("animation body: {0} bytes after its last track")]
+    Trailing(usize),
+    #[error("animation events: no AnimTrackData after the {0} events")]
+    NoTrackData(u32),
+}
+
+/// An Animation resource's body as stored ([`crate::animation`] for what each field is).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredAnimation {
+    /// `Length` (f32).
+    pub length: f32,
+    /// `F4F597FF`: varies by clip.
+    pub id_hash: u32,
+    /// `322B96B8`: 0 on every clip.
+    pub f2: u32,
+    /// `556E9166` and `251905D9`: empty on every clip.
+    pub arrays: [Vec<u16>; 2],
+    /// The four booleans (`1F4DA15F`, `93847F6A`, `ABC2D4B8`, `0D7D1D50`).
+    pub flags: [u8; 4],
+    pub events: StoredEvents,
+    /// The `AnimTrackData` object's id (0 on every clip) and its `567530C5`.
+    pub track_data_id: u64,
+    pub track_data_hash: u32,
+    /// Each track's bone: the CRC-32 of its name (0 for the root's), the mappings in the tracks' order.
+    pub mappings: Vec<u32>,
+    /// `66A6DC91`.
+    pub track_data_tail: u16,
+    pub ecl: Option<StoredEcl>,
+    /// `B832D26F`, a byte buffer (empty on every clip).
+    pub buffer: Vec<u8>,
+    /// `CB4E5F18`.
+    pub cb4e: u32,
+    pub tracks: Vec<StoredTrack>,
+}
+
+/// An Animation's `TTECLAnimation` object, its four arrays as stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredEcl {
+    pub id: u64,
+    pub animation: Vec<u8>,
+    pub words: Vec<u32>,
+    pub halves: Vec<u16>,
+    pub bytes: Vec<u8>,
+}
+
+/// An Animation's `AnimTrackEvent` array as stored: the count and the elements' bytes (not read).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredEvents {
+    pub count: u32,
+    pub bytes: Vec<u8>,
+}
+
+/// One track of an Animation as stored: its block's tag (`3 * kind + w`), its size field, the key count, the times and
+/// the values (`keys` of the kind's width, as bytes). The bone it drives is the clip's mapping at its position.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredTrack {
+    pub tag: u8,
+    /// The block's `a` field, its in-memory size (within 8 of the stored payload's length on every clip).
+    pub size: u32,
+    pub keys: u32,
+    pub times: Times,
+    pub values: Vec<u8>,
+}
+
+/// How a track's key times are stored ([`crate::animation`]: the tag's remainder over 3).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Times {
+    /// A u8 for each key after the first (the first is at 0).
+    U8(Vec<u8>),
+    /// A u16 for each key after the first.
+    U16(Vec<u16>),
+    /// A bit mask of the frames that hold a key, with its marker byte's top two bits (`mode`: 1, 2 or 3).
+    Mask { mode: u8, mask: Vec<u8> },
+}
+
+/// A track's values decoded ([`StoredTrack::values`]).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Values {
+    /// Kind 9: translations.
+    Vec3(Vec<[f32; 3]>),
+    /// Kinds 3, 4, 5, 7 and 8: unit quaternions `[x, y, z, w]`, the component the format leaves out the positive root.
+    Quaternions(Vec<[f32; 4]>),
+}
 
 /// The grammar's refusals as the animation error names them.
 impl From<BodyError> for Error {
@@ -96,8 +200,6 @@ impl From<BodyError> for Error {
         }
     }
 }
-
-use primase_foundations::bytes::Field;
 
 /// A record type: the CRC-32 of `Animation`.
 pub const ANIMATION: u32 = 0x0FA3_067F;

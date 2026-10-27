@@ -51,11 +51,37 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::LE;
+use crate::fields::LE;
 use primase_foundations::bytes::{Field, FieldError, View};
 use std::ops::Range;
 
-pub use crate::components::{StoredMeshBone, StoredSkin};
+/// One `MeshBone` of a Mesh's bone list: a bone the mesh's skin stream may name, as the 81-byte record stores it
+/// (an object id of 0, the class `MeshBone`, then the registry's three fields, `BoneID`, `InitialMatrixInverse` and
+/// `IsUsedBySubMeshes`; docs/registry-named-fields.md §4).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredMeshBone {
+    /// `BoneID`: by value the CRC-32 of the bone's name, the key of a skeleton's [`crate::skeleton::StoredBone::name_hash`].
+    pub bone_id: u32,
+    /// `InitialMatrixInverse`: a 4x4 as 16 f32 in four rows of x, y, z and w, the translation in the last row.
+    pub initial_matrix_inverse: [[f32; 4]; 4],
+    /// `IsUsedBySubMeshes`.
+    pub used_by_submeshes: bool,
+}
+
+/// A mesh's skin as its skin stream stores it (the split layouts'): each vertex a record of `influences` bone slots
+/// (a byte each: positions in the mesh's bone list, [`crate::mesh::StoredMesh::bones`]) and then as many weights (a byte each,
+/// summing to 255). Established on every one of Riders Republic's 29,174 meshes with bones (29,116 with 4 influences
+/// and 58 with 8; 39,795,423 vertices: tests/skin_binding.rs): the weights sum to 255 on every vertex, and every slot
+/// with a weight is below the bone count. A slot with no weight is kept as stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredSkin {
+    /// The slots and weights of a vertex each: 4 or 8.
+    pub influences: usize,
+    /// Each vertex's slots, in vertex order, `influences` a vertex.
+    pub slots: Vec<u8>,
+    /// Each vertex's weights, in the same order.
+    pub weights: Vec<u8>,
+}
 
 /// A record type: equals the CRC-32 of the ASCII string `Mesh` (the name a label).
 pub const MESH: u32 = 0x415D_9568;
@@ -169,8 +195,8 @@ impl StoredVertices {
 
     /// Each vertex's position: its first three i16 times its fourth over 32768 (the exact product rounded once to f32,
     /// a zero product +0). Equal bit for bit to the third-party RRAssetStudio's positions on every mesh both read
-    /// (worlds/anvil/tests/census.rs with `oracles.rrassetstudio.riders/meshes`). Before that comparison its evidence
-    /// was the extrema alone: on every fixture in tests/meshes.rs each axis's least and greatest differs from the
+    /// (a census against RRAssetStudio's mesh export). Before that comparison its evidence
+    /// was the extrema alone: on every fixture measured each axis's least and greatest differs from the
     /// header's stored bound by at most one step (`|w| / 32768`; largest 1.14e-4), and the census measures the same on
     /// every mesh of strides 16 (2,036) and 28 (86) in Riders Republic. No stored value checks a vertex between them.
     pub fn positions(&self) -> impl Iterator<Item = [f32; 3]> {
@@ -592,8 +618,8 @@ impl<'a> Cursor<'a> {
     }
 }
 
-/// An inline mesh's index width, by `MeshData`'s first byte: 0, 2 bytes; 1, 4 bytes. Established by the census
-/// (worlds/anvil/tests/census.rs): with it every inline mesh's index buffer is whole triangles of its MeshPrimitive's
+/// An inline mesh's index width, by `MeshData`'s first byte: 0, 2 bytes; 1, 4 bytes. Established by a census:
+/// with it every inline mesh's index buffer is whole triangles of its MeshPrimitive's
 /// count. Not a ranged mesh's: one has 1 there and 2-byte indices its ranges and MeshPrimitive entries agree with.
 /// Measured over every mesh of Riders Republic (110,779), the byte is 1 exactly when the mesh has more than 65,535
 /// vertices; that relation is recorded, not read.
@@ -626,7 +652,7 @@ pub fn max_culling_distance(body: &[u8]) -> f32 {
 }
 
 impl StoredMesh {
-    /// A Mesh resource's body (its [`crate::read::data::Resource::body`]).
+    /// A Mesh resource's body (its [`crate::data::Resource::body`]).
     pub fn parse(body: &[u8]) -> Result<StoredMesh, Error> {
         let mut c = Cursor::new(body);
         let head = c.array::<20>().field("head")?;

@@ -7,10 +7,8 @@
 //! texture GFX_Jammer_NormalMap) and MAD_Screens_Simple's t75 (slot 0, channel 0, no default).
 use std::collections::BTreeSet;
 
-use primase_anvil::read::archive::{Archive, At};
-use primase_anvil::read::template::{
-    self, BindingKind, MATERIAL_TEMPLATE, OperatorDefault, texture_parameter,
-};
+use anvil_formats::archive::{Archive, At};
+use anvil_formats::template::{self, BindingKind, MATERIAL_TEMPLATE, OperatorDefault, texture_parameter};
 use primase_testdata::{Game, install};
 
 #[test]

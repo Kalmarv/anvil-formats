@@ -22,7 +22,7 @@ use std::ops::Range;
 
 use primase_foundations::bytes::{Field, FieldError, View};
 
-use crate::read::fields::LE;
+use crate::fields::LE;
 
 /// Why an entry's objects can't be read.
 #[derive(Debug, thiserror::Error)]

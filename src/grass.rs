@@ -13,12 +13,84 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::read::fields::{BodyError, LE, body_error, count, expect, object};
+use crate::fields::{BodyError, LE, body_error, count, expect, object};
 use primase_foundations::bytes::{Cursor, Field};
 
-pub use crate::components::{
-    GrassModelSettings, StoredGrassGroup, StoredGrassLibrary, StoredGrassModel, StoredGrassRule,
-};
+/// A GrassModel's settings, as the registry's class stores them (docs/grass.md §2.2): the six f32, the bytes and the
+/// enum, the imposter shader levels, and the 23 bytes after them that the class list doesn't name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GrassModelSettings {
+    pub z_offset: f32,
+    pub height_scale_for_occlusion: f32,
+    pub terrain_normal_follower_ratio: f32,
+    pub root_height: f32,
+    pub softness: f32,
+    pub normal_bend_factor: f32,
+    pub visible_virtual_lod_count: u8,
+    pub texture_atlas_element_count: u8,
+    /// `RaycastTranslucency` (the enum `GrassModel::RaycastTranslucency`).
+    pub raycast_translucency: u32,
+    /// `ImposterStartShaderModelLodIndex` and the two after it: three bytes.
+    pub imposter_shader_start_model_lod_index: [u8; 3],
+    pub imposter_lookat_ratio: f32,
+    /// The 23 bytes that follow, as stored: a LOD table of 5 bytes (`00 01 02 03 03`), four f32 and 2 bytes.
+    pub unnamed: [u8; 23],
+    /// The four f32 of `unnamed`: the model's LOD switch distances in metres by the notes' reading by value: (0, 10, 20,
+    /// 40) on 26 models, (0, 5, 10, 20) on 16 and (0, 20, 40, 80) on 4 (counted over the 46 models).
+    pub switch_distances: [f32; 4],
+}
+
+/// A group: the rules that apply where a ground sample picks it (a GrassPattern).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredGrassGroup {
+    pub id: u64,
+    pub rules: Vec<StoredGrassRule>,
+}
+
+/// A GrassPatternLibrary body as stored.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredGrassLibrary {
+    pub models: Vec<StoredGrassModel>,
+    pub groups: Vec<StoredGrassGroup>,
+    /// The 256-byte table that follows the groups: the group of a material (`FF`: none; all but entry 255 on Riders
+    /// Republic's, whose entry 255 is 184).
+    pub table: [u8; 256],
+    /// The 187 bytes after the table, as stored (zeros).
+    pub rest: Vec<u8>,
+}
+
+/// One model of the library: its settings and its bounding volume.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredGrassModel {
+    pub id: u64,
+    pub settings: GrassModelSettings,
+    /// The BoundingVolume object's id, its six f32 (min and max) and the 24 bytes after them as stored.
+    pub bounds_id: u64,
+    pub bounds: [f32; 6],
+    pub bounds_rest: [u8; 24],
+}
+
+/// A rule: one model that may grow where its group is picked (a GrassPatternElement).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredGrassRule {
+    pub id: u64,
+    /// `GrassModelIndex`: the position in the setup's ManagedEntities (and the library's models). 0 to 50 occur;
+    /// 46 to 50 name no model.
+    pub model: u16,
+    pub tiling_log_count: u8,
+    pub density: f32,
+    pub tilt_factor: f32,
+    pub scaling_enabled: bool,
+    pub scale_a: f32,
+    pub scale_b: f32,
+    pub height_scaling_enabled: bool,
+    pub height_scale_a: f32,
+    pub height_scale_b: f32,
+    /// The field `63D19E01` (5.0 on 145 rules, 0.0 on 66, 2.5 on others): not named.
+    pub unnamed_f32: f32,
+    /// The 49 bytes after it as stored (a byte 100, a u16, ten f32 of 1.0 and six bytes).
+    pub unnamed: [u8; 49],
+}
 
 /// The four f32 after the LOD table in a model's 23 unnamed bytes (at 5, 9, 13 and 17): its LOD switch distances in
 /// metres, by the notes' reading by value.

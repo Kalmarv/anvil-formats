@@ -3,7 +3,7 @@
 //! first byte, or a `03` followed by anything but zeros, is refused.
 //!
 //! Established on two LODSelectors (both forms) and three Materials and a TextureSet (the `01` form) as fixtures, and
-//! by the census of every LODSelector, Material and TextureSet in Riders Republic (worlds/anvil/tests/census.rs). The
+//! by the census of every LODSelector, Material and TextureSet in Riders Republic. The
 //! byte after `01` is kept as stored (1 on every entry read; what it selects is not established).
 #![deny(
     clippy::arithmetic_side_effects,
@@ -24,7 +24,11 @@ pub enum Error {
 }
 
 /// A reference to a resource (tag `01`).
-pub use crate::components::stored::Reference;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Reference {
+    pub mode: u8,
+    pub id: u64,
+}
 
 /// The reference these bytes hold: `Some` for `01`, `None` for `03`.
 pub fn parse(bytes: [u8; LENGTH]) -> Result<Option<Reference>, Error> {

@@ -1,12 +1,25 @@
 //! Event look presets (lighting.md §4). Decode stored values; the second preset scalar and forecast lane roles
-//! are not proven sun/wind/fog inputs. Do not apply them to core.environment by a name-based guess.
+//! are not proven sun/wind/fog inputs. Their names alone don't say how a renderer applies them.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
-pub use crate::components::stored::StoredLook;
-use crate::read::reference;
+use crate::reference::{self, Reference};
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum StoredLook {
+    Ambiance {
+        season: u64,
+        forecast: Option<Reference>,
+        hour: f32,
+        angle: f32,
+        flag: u8,
+    },
+    Forecast {
+        values: [f32; 12],
+    },
+}
 pub const AMBIANCE_PRESET: u32 = 0xE8EC_CA01;
 pub const FORECAST_PRESET: u32 = 0x79B0_E782;
 

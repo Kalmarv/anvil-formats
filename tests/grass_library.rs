@@ -1,6 +1,6 @@
 //! A GrassPatternLibrary body built by hand in the layout of Riders Republic's (docs/grass.md §2.2): one model, a group
 //! with one rule, an empty group and the 443-byte tail.
-use primase_anvil::read::grass::StoredGrassLibrary;
+use anvil_formats::grass::StoredGrassLibrary;
 
 fn object(id: u64, kind: u32) -> Vec<u8> {
     let mut b = id.to_le_bytes().to_vec();

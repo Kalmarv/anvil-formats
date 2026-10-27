@@ -5,24 +5,32 @@
     clippy::indexing_slicing,
     clippy::cast_possible_truncation
 )]
-pub use crate::components::stored::{SkyKeyframe, StoredSky};
+#[derive(Clone, Debug, PartialEq)]
+pub struct SkyKeyframe {
+    pub hour: f32,
+    pub crc: u32,
+    pub inscatter: Vec<u8>,
+    pub optical_depth: Vec<u8>,
+    pub irradiance: Vec<u8>,
+    pub sun_depth: Vec<u8>,
+    pub sun_irradiance: Vec<u8>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StoredSky {
+    pub sun_position_mode: u32,
+    pub sun_azimuth: f32,
+    pub sun_tilt: f32,
+    pub sun_elevation: f32,
+    pub sun_color: [f32; 4],
+    pub sun_intensity: f32,
+    pub mie: [f32; 3],
+    pub keyframes: Vec<SkyKeyframe>,
+}
 pub const LAYERED_SKY: u32 = 0x24D3_2CF8;
 pub const WORLD_AMBIANCE: u32 = 0x21C2_D472;
 const KEYFRAME: u32 = 0x5CDF_6DE9;
 const FRAME_BYTES: usize = 143_422;
-
-/// Convert the *evaluated lighting multiplier* cb1[39].x into core's log2 stops. PS_SunSkyModel (ShaderDataDX11
-/// 1815) and DeferredAmbientOnly (448) multiply radiance by this value directly: it is a positive linear scale,
-/// not EV and not the grading controller's property also named Exposure. This function requires an actual
-/// resolved frame value; it must not be fed MinEV/MaxEV, t23, or the grading Exposure without their own mapping.
-pub fn exposure_from_lighting_scale(scale: f32) -> Result<primase_core::Exposure, String> {
-    if !scale.is_finite() || scale <= 0.0 {
-        return Err(format!(
-            "cb1[39].x lighting exposure scale {scale} must be finite and positive"
-        ));
-    }
-    Ok(primase_core::Exposure { stops: scale.log2() })
-}
 
 fn word(body: &[u8], at: usize) -> Result<u32, String> {
     let end = at.checked_add(4).ok_or("sky: word offset overflow")?;
@@ -327,15 +335,6 @@ pub fn ambiance(body: &[u8]) -> Result<(u64, u64), String> {
 )]
 mod tests {
     use super::*;
-    #[test]
-    fn lighting_scale_is_linear_and_only_resolved_positive_values_become_stops() {
-        for (scale, stops) in [(0.25, -2.0), (0.5, -1.0), (1.0, 0.0), (2.0, 1.0), (4.0, 2.0)] {
-            assert_eq!(exposure_from_lighting_scale(scale).unwrap().stops, stops);
-        }
-        for scale in [0.0, -1.0, f32::NAN, f32::INFINITY] {
-            assert!(exposure_from_lighting_scale(scale).is_err());
-        }
-    }
     #[test]
     fn half_values_preserve_hdr_and_sign_and_bad_radiance_inputs_are_refused() {
         assert_eq!(half(0x3c00), 1.0);

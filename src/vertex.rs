@@ -28,7 +28,21 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::components::VertexAttributes;
+/// A Mesh's vertex attributes as the engine's vertex declarations decode them ([`crate::vertex`]; each empty where
+/// its layout declares none), in the source's frame.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct VertexAttributes {
+    /// Unnormalised, as the programs read them.
+    pub normals: Vec<[f32; 3]>,
+    /// xyz unnormalised, w the bitangent's sign (+1 or -1).
+    pub tangents: Vec<[f32; 4]>,
+    /// The texture coordinates of `TEXCOORD0` (or the split layouts' first set), then the second set.
+    pub uvs: [Vec<[f32; 2]>; 2],
+    /// RGBA, UNORM8.
+    pub colour: Vec<[u8; 4]>,
+    /// static16's two spherical vectors: `P` (bytes 10, 11) and `Q` (bytes 8, 9).
+    pub spherical: Vec<[[f32; 3]; 2]>,
+}
 
 /// An `R16G16_SNORM` word's value.
 fn snorm16(w: [u8; 2]) -> f32 {

@@ -1,23 +1,23 @@
-//! Which Entities mark a place rather than draw one: the table from this game's names to `core.marker` kinds.
+//! Which Entities mark a place rather than draw one, and the kind of place each marks (a spawn point or a start).
 //!
 //! Two sources say what an Entity marks. A **spawn node** carries a component of the SpawnPoint class
-//! ([`crate::read::scene::SPAWN_POINT`]): the data states it, so the kind `spawn_point` is read from the class, not a
+//! ([`crate::shaunwhite::scene::SPAWN_POINT`]): the data states it, so the kind `spawn_point` is read from the class, not a
 //! name (82 in level 01: 74 are `01_A_/01_B_SpawnPoint_Plaza_NNN`, the rest nodes named after NPC trajectories).
-//! A **player spawner** carries a component of the PlayerSpawner class ([`crate::read::scene::PLAYER_SPAWNER`]): where
+//! A **player spawner** carries a component of the PlayerSpawner class ([`crate::shaunwhite::scene::PLAYER_SPAWNER`]): where
 //! a mission puts the skater down (level 01: one in a cell; the Stronghold's root entry: ten), and so does a
-//! multiplayer world's [`crate::read::scene::MULTI_POINT_PLAYER_SPAWNER`] (one in each root entry);
+//! multiplayer world's [`crate::shaunwhite::scene::MULTI_POINT_PLAYER_SPAWNER`] (one in each root entry);
 //! it is read as a `start`, named by its Entity. A **start position** is an Entity with no component at all, whose only
-//! statement is its name; [`START_NAMES`] is the table of those names. The reader places each as a `core.marker` at the Entity's matrix; which local axis the game
-//! calls forward is not read, so the marker carries the whole matrix and no yaw.
+//! statement is its name; [`START_NAMES`] is the table of those names. The place is the Entity's matrix; which local axis the game
+//! calls forward is not read.
 //!
-//! What no row maps is not guessed: an Entity that has neither a Visual nor a marker is counted in the reader's
-//! report (`entities with neither a Visual nor a marker`).
+//! What no row maps is not guessed: an Entity that has neither a Visual nor a marker is neither drawn nor a
+//! marker by this table.
 
-use crate::read::scene::{MULTI_POINT_PLAYER_SPAWNER, PLAYER_SPAWNER, SPAWN_POINT};
+use crate::shaunwhite::scene::{MULTI_POINT_PLAYER_SPAWNER, PLAYER_SPAWNER, SPAWN_POINT};
 
-/// The `core.marker` kind of a spawn node (a SpawnPoint component).
+/// The kind of place a spawn node marks (a SpawnPoint component).
 pub const SPAWN_POINT_KIND: &str = "spawn_point";
-/// The `core.marker` kind of a start position (a name in [`START_NAMES`], or a PlayerSpawner component).
+/// The kind of place a start position marks (a name in [`START_NAMES`], or a PlayerSpawner component).
 pub const START_KIND: &str = "start";
 
 /// One row of the start-position table: a name that contains `needle` marks where something starts.

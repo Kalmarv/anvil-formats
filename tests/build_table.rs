@@ -1,9 +1,10 @@
 //! A BuildTable laid out by hand (two columns, two rows, resources), and the census of every BuildTable of Riders
 //! Republic's forges read to its last byte: counts of columns, rows, properties and links, and that the rider part
 //! tables name what they should.
-use primase_anvil::components::{BuildLink, StoredBuildTable};
-use primase_anvil::read::archive::{Archive, At};
-use primase_anvil::read::build_table::BUILD_TABLE;
+use anvil_formats::archive::{Archive, At};
+use anvil_formats::build_table::BUILD_TABLE;
+use anvil_formats::build_table::BuildLink;
+use anvil_formats::build_table::StoredBuildTable;
 use primase_testdata::{Game, install};
 
 fn u32s(v: &[u32]) -> Vec<u8> {
@@ -231,7 +232,9 @@ fn the_footwear_part_table_names_its_selector_skeleton_and_materials() {
 /// 41 of the solver's 59 bytes); a column with no solver, another solver or a null link names none.
 #[test]
 fn a_material_solver_column_names_its_generic_material() {
-    use primase_anvil::components::{BuildColumn, BuildValue, PathNode};
+    use anvil_formats::build_table::BuildColumn;
+    use anvil_formats::build_table::BuildValue;
+    use anvil_formats::build_table::PathNode;
     let value = BuildValue {
         class: 0,
         before: 0,

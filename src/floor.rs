@@ -12,10 +12,10 @@
 //! exactly by both of the game's FloorHeightData (the blocks fill the body between header and trailer), and `lo` is
 //! at most `hi` in all 4,194,304 of MAD_USNAT's blocks. The cell order within a block is the notes' (block borders
 //! continuous: a mean step of 14.25 words across them along x, 86.02 with each block's rows and columns swapped, over
-//! 2,397,037 border pairs of every 7th row; worlds/anvil/tests/floor.rs measures it), and a cell's place, x =
+//! 2,397,037 border pairs of every 7th row; measured on the game's data), and a cell's place, x =
 //! origin x + cell side x column (y likewise by row), theirs against Entities (correlation 0.917 over 6,000; other
 //! orientations 0.18 or less). What a cell's word is from `lo`, `hi` and its index, its height and where in the cell
-//! the sample lies are a pass's: see `lower-anvil-floor`. The z origin, 338.86 and the trailer's last fields aren't
+//! the sample lies are not read here. The z origin, 338.86 and the trailer's last fields aren't
 //! read.
 #![deny(
     clippy::arithmetic_side_effects,
@@ -23,11 +23,17 @@
     clippy::cast_possible_truncation
 )]
 
-use primase_core::frame::SourceFrame;
-
-use crate::components::{AnvilFloorHeight, FloorBlock};
-use crate::read::fields::LE;
+use crate::fields::LE;
 use primase_foundations::bytes::{Field, FieldError, View};
+
+/// A FloorHeightData block: two words and sixteen 2-bit indices between them, cell (r, c) of the block (r along y)
+/// at bits 2 (4 r + c).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FloorBlock {
+    pub lo: u16,
+    pub hi: u16,
+    pub indices: u32,
+}
 
 /// A record type: the CRC-32 of `FloorHeightData`.
 pub const FLOOR_HEIGHT_DATA: u32 = 0x92AD_A771;
@@ -173,19 +179,6 @@ impl StoredFloorHeight {
             trailer,
         })
     }
-
-    /// The grid as the reader puts it in a world, its points in `frame` (the program's stated choice).
-    pub fn component(self, frame: SourceFrame) -> AnvilFloorHeight {
-        let [x, y, _] = self.trailer.origin;
-        AnvilFloorHeight {
-            frame,
-            cell: self.cell,
-            scale: self.trailer.scale,
-            origin: [x, y],
-            cells: self.trailer.cells,
-            blocks: self.blocks,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -219,11 +212,15 @@ mod tests {
         block[4..].copy_from_slice(&bits.to_le_bytes());
         let f = StoredFloorHeight::parse(&body(block)).expect("floor");
         assert_eq!((f.cell, f.trailer.cells, f.blocks.len()), (2.0, [4, 4], 1));
-        let g = f.component(SourceFrame::WORLD);
-        assert_eq!((g.origin, g.cells), ([-4.0, -4.0], [4, 4]));
-        assert_eq!(g.cell(3, 0), Some((100, 400, 3)));
-        assert_eq!(g.cell(1, 2).map(|c| c.2), Some(1));
-        assert_eq!(g.cell(4, 0), None);
+        assert_eq!(f.trailer.origin, [-4.0, -4.0, -3584.0]);
+        assert_eq!(
+            f.blocks.first(),
+            Some(&FloorBlock {
+                lo: 100,
+                hi: 400,
+                indices: bits
+            })
+        );
         let mut long = body(block);
         long.insert(20, 0);
         assert!(StoredFloorHeight::parse(&long).is_err());
