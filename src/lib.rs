@@ -1,10 +1,13 @@
-//! Readers for the data files of Ubisoft's Anvil engine: bytes in, plain records out.
+//! Readers for the data files of Ubisoft's Anvil engine: `.forge` archives and the meshes, textures, materials,
+//! entities and terrain stored in them.
 //!
-//! Written against Riders Republic (Steam build 25394987; `.forge` archives of version 27, zstd-compressed) and
-//! Shaun White Skateboarding (PC, 2010; version 26, LZO2A). The formats were worked out from those games' own files and
-//! checked against them, with third-party readers (AnvilToolkit, ACExplorer, RRAssetStudio) as cross-checks where they
-//! exist (see below); the Engine wiki records the formats: <https://kalmarv.github.io/engine-wiki/engines/anvil/>. Docs here cite
-//! "the Riders Republic survey" for the census those pages are drawn from.
+//! Written against two games' own files: Riders Republic (Steam build 25394987; `.forge` version 27, zstd-compressed
+//! blocks) and Shaun White Skateboarding (PC, 2010; version 26, LZO2A blocks). The crate reads the archive index and
+//! name tables, an entry's compressed data blocks (checksum verified), and the resources inside as plain records that
+//! keep every byte it does not interpret as stored. The formats were worked out from those games' files and checked
+//! against them, with third-party readers (AnvilToolkit, ACExplorer, RRAssetStudio) as cross-checks where they exist
+//! (see below); the Engine wiki records the formats: <https://kalmarv.github.io/engine-wiki/engines/anvil/>. Docs here
+//! cite "the Riders Republic survey" for the census those pages are drawn from.
 //!
 //! - **Containers.** A `.forge` archive of version 26 or 27 ([`forge`]): its index, each entry's offset, size and
 //!   ids as stored, and each entry's name record. An entry's data blocks ([`data`]): compression version 2 (zstd) or
