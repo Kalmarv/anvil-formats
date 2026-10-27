@@ -32,7 +32,8 @@ pub struct WaterPatch {
     pub unread: [u8; 4],
     /// u0, v0, u1, v1 in the atlases.
     pub rect: [f32; 4],
-    /// The patch's level (u32 at offset 45); its square has side `512 >> level` metres, see [`WaterPatch::side`].
+    /// The patch's level (u32 at offset 45); its square has side `512 >> level` metres, see
+    /// [`WaterPatch::side`].
     pub level: u32,
 }
 

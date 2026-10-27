@@ -61,11 +61,13 @@ pub enum Kind {
     GridCellDataBlock,
     /// A `TerrainNodeLayer`: the quadtree of terrain nodes; read by [`crate::tnl`].
     TerrainNodeLayer,
-    /// A `TerrainMaterialBank`: the list a terrain material raster indexes; read by [`crate::terrain_material`].
+    /// A `TerrainMaterialBank`: the list a terrain material raster indexes; read by
+    /// [`crate::terrain_material`].
     TerrainMaterialBank,
     /// A `TerrainMaterial`: one terrain detail material; read by [`crate::terrain_material`].
     TerrainMaterial,
-    /// A `CollisionMaterial`: a physical surface type; named by a TerrainMaterial ([`crate::terrain_material`]).
+    /// A `CollisionMaterial`: a physical surface type; named by a TerrainMaterial
+    /// ([`crate::terrain_material`]).
     CollisionMaterial,
     /// A `FloorHeightData`: a terrain height grid; read by [`crate::floor`].
     FloorHeightData,

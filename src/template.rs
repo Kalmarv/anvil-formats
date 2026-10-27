@@ -59,7 +59,8 @@ pub struct Binding {
     pub at: usize,
     /// Its property's key.
     pub key: u32,
-    /// The four u32 after the key, f1 to f4, as stored; [`Binding::kind`] reads (f3, f4) as what the record binds.
+    /// The four u32 after the key, f1 to f4, as stored; [`Binding::kind`] reads (f3, f4) as what the record
+    /// binds.
     pub f: [u32; 4],
     /// The 10 bytes after the four words: a reference, or the tag-0 form kept as stored.
     pub target: Target,
@@ -466,7 +467,8 @@ pub enum BindingError {
     /// The body ends inside a record; the offset is where the record starts.
     #[error("MaterialTemplate binding at {0}: the body ends inside it")]
     Short(usize),
-    /// A TextureParameter or pin does not have the fixed bytes the format gives it; the offset is where it starts.
+    /// A TextureParameter or pin does not have the fixed bytes the format gives it; the offset is where it
+    /// starts.
     #[error("MaterialTemplate TextureParameter at {0}: its byte or third word isn't 0")]
     Parameter(usize),
     /// A 10-byte reference in the record is malformed.
@@ -513,7 +515,8 @@ pub enum Error {
     /// No run of descriptors reads whole in the body.
     #[error("MaterialTemplate: no descriptor run reads whole")]
     None,
-    /// More than one run of descriptors reads whole: the count of runs, and the offset of each run's first descriptor.
+    /// More than one run of descriptors reads whole: the count of runs, and the offset of each run's first
+    /// descriptor.
     #[error(
         "MaterialTemplate: {0} descriptor runs read whole, at {1:?}: which is the template's isn't established"
     )]
@@ -684,7 +687,8 @@ pub struct Permutation<'b> {
 /// Why a template's permutations can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum PermutationError {
-    /// A ShaderPermutation record has a fixed field with another value (for example a parameter count other than 0).
+    /// A ShaderPermutation record has a fixed field with another value (for example a parameter count other
+    /// than 0).
     #[error("ShaderPermutation at {at}: {what} {found:#x}, not {read}")]
     Value {
         /// The field refused.
@@ -710,7 +714,8 @@ pub enum PermutationError {
         /// How many containers carry that hash.
         programs: usize,
     },
-    /// The permutation's program has no usable stage (its chunks do not parse, it has no program chunk, or it is of another stage).
+    /// The permutation's program has no usable stage (its chunks do not parse, it has no program chunk, or it
+    /// is of another stage).
     #[error("ShaderPermutation at {at} (key {key:#010x}): its program at {program_at} can't be read: {why}")]
     Unread {
         /// The record's offset in the body.

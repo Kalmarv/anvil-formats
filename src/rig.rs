@@ -54,14 +54,16 @@ pub struct RigBone {
 /// order it stores them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredRig {
-    /// The bones in assembly order: the main Skeleton's first, then each addon Skeleton's new bones in stored order.
+    /// The bones in assembly order: the main Skeleton's first, then each addon Skeleton's new bones in stored
+    /// order.
     pub bones: Vec<RigBone>,
 }
 
 /// Why Skeletons can't be joined into a rig.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    /// A bone's parent pointer names a bone id the same Skeleton does not hold; `skeleton` is its index in the list given to `assemble`, `bone` the bone's name hash and `parent` the missing id.
+    /// A bone's parent pointer names a bone id the same Skeleton does not hold; `skeleton` is its index in
+    /// the list given to `assemble`, `bone` the bone's name hash and `parent` the missing id.
     #[error("skeleton {skeleton}: bone {bone:08x} names a parent {parent:#x} that the skeleton doesn't hold")]
     Parent {
         /// The Skeleton's position in the list given to `assemble`.

@@ -31,7 +31,9 @@ pub struct StoredGiDyn {
     pub subvolume_word: u32,
     /// The four encoded streams, as stored.
     pub streams: [Vec<u8>; 4],
-    /// The three u32 sizes after the streams: decoded bytes of the sample stream (10 per sample), of the second ("V2") stream (at least 24 per probe plus an 8-byte header), and of the grid stream (2 per voxel of the box).
+    /// The three u32 sizes after the streams: decoded bytes of the sample stream (10 per sample), of the
+    /// second ("V2") stream (at least 24 per probe plus an 8-byte header), and of the grid stream (2 per
+    /// voxel of the box).
     pub decoded_bytes: [u32; 3],
 }
 
@@ -45,7 +47,8 @@ const BOX: u32 = 0xE96B_B4A2;
 /// Why a GIDynResource body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// The body is short, outside the one-volume, one-box profile, or a stream does not decode to the sizes its footer states; the inner error names the field and offset.
+    /// The body is short, outside the one-volume, one-box profile, or a stream does not decode to the sizes
+    /// its footer states; the inner error names the field and offset.
     #[error("GIDynResource {0}")]
     Body(#[from] BodyError),
 }

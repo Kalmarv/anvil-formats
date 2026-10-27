@@ -45,7 +45,8 @@ pub enum Error {
     /// The body ends before a field (prefix, section header) is complete.
     #[error("MeshShape body: {0}")]
     Short(#[from] FieldError),
-    /// A prefix byte is not what is read: the first must be 1, the second 0, 0x21 or 0x3F, and the three after it 0.
+    /// A prefix byte is not what is read: the first must be 1, the second 0, 0x21 or 0x3F, and the three
+    /// after it 0.
     #[error("MeshShape prefix: byte {found} at {at}, not {read}")]
     Prefix {
         /// The byte's offset in the body.
@@ -88,7 +89,9 @@ pub enum Error {
         /// Which check failed.
         why: &'static str,
     },
-    /// A geometry section is missing, repeated, of the wrong length or inconsistent with the counts, an index is out of range, or an edge's faces are not the faces naming it; `kind` is the section type and `why` says what.
+    /// A geometry section is missing, repeated, of the wrong length or inconsistent with the counts, an index
+    /// is out of range, or an edge's faces are not the faces naming it; `kind` is the section type and `why`
+    /// says what.
     #[error("MeshShape geometry: section {kind:#06x}: {why}")]
     Geometry {
         /// The section type.
@@ -317,8 +320,10 @@ impl MeshShape {
         })
     }
 
-    /// Its triangle geometry as stored: each section's length exact for its count, every index in range, and each
-    /// edge's face ids the faces that name it (two for an edge between faces, one and [`NO_FACE`] for a boundary
+    /// Its triangle geometry as stored: each section's length exact for its count, every index in range, and
+    /// each
+    /// edge's face ids the faces that name it (two for an edge between faces, one and [`NO_FACE`] for a
+    /// boundary
     /// edge). Nothing is converted: positions are as stored, in the shape's own units and frame.
     pub fn geometry(&self) -> Result<Geometry, Error> {
         let bad = |kind: u16, why: String| Error::Geometry { kind, why };

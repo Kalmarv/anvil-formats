@@ -138,7 +138,8 @@ pub enum Error {
     /// The object ends before a field is complete.
     #[error(transparent)]
     Field(#[from] FieldError),
-    /// A field has a value the format does not allow (a wrong class id, a negative or non-finite value, a range or cone out of order, or bytes left over); `field` names it.
+    /// A field has a value the format does not allow (a wrong class id, a negative or non-finite value, a
+    /// range or cone out of order, or bytes left over); `field` names it.
     #[error("light {field}: {why}")]
     Invalid {
         /// The field that was refused.
@@ -193,7 +194,8 @@ fn finish(c: &Cursor<'_>) -> Result<(), Error> {
         Err(invalid("object end", format!("{} trailing bytes", c.remaining())))
     }
 }
-/// Whether `class` is one of the four light classes ([`OMNI_LIGHT`], [`SPOT_LIGHT`], [`DIRECTIONAL_LIGHT`], [`SUN_LIGHT`]).
+/// Whether `class` is one of the four light classes ([`OMNI_LIGHT`], [`SPOT_LIGHT`], [`DIRECTIONAL_LIGHT`],
+/// [`SUN_LIGHT`]).
 pub fn is_light(class: u32) -> bool {
     matches!(class, OMNI_LIGHT | SPOT_LIGHT | DIRECTIONAL_LIGHT | SUN_LIGHT)
 }

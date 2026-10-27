@@ -64,7 +64,8 @@ pub struct CatalogPart {
     pub table: u64,
     /// The part table's entry name.
     pub name: String,
-    /// The part's variants, in the order its materials table lists them; empty when no materials table is found.
+    /// The part's variants, in the order its materials table lists them; empty when no materials table is
+    /// found.
     pub variants: Vec<VariantRow>,
 }
 

@@ -53,11 +53,13 @@ body_error!(Error, Error::Body);
 /// A GridLayout as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GridLayout {
-    /// The run of u16 before the cell size, as stored; its length (5 in base forges' Worlds, 4 in their patches') is chosen by the caller of [`grid_descriptions`] and its meaning is not read.
+    /// The run of u16 before the cell size, as stored; its length (5 in base forges' Worlds, 4 in their
+    /// patches') is chosen by the caller of [`grid_descriptions`] and its meaning is not read.
     pub words: Vec<u16>,
     /// The side of a level-0 cell (i32), in the layout's own coordinate unit.
     pub cell_size: i32,
-    /// The grid's bottom-left corner (three i32); the first two give the horizontal plane [`GridLayout::cell`] uses.
+    /// The grid's bottom-left corner (three i32); the first two give the horizontal plane
+    /// [`GridLayout::cell`] uses.
     pub bottom_left: [i32; 3],
     /// The number of level-0 cells along one side (i32); each coarser level has half as many.
     pub dimension: i32,
@@ -123,7 +125,8 @@ pub struct StoredGridPartition {
 }
 
 impl StoredGridPartition {
-    /// Reads a GridPartition body to its last byte; refuses a changed fixed word (first byte, a cell's id and type, the closing zero) and trailing bytes.
+    /// Reads a GridPartition body to its last byte; refuses a changed fixed word (first byte, a cell's id and
+    /// type, the closing zero) and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredGridPartition, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "GridPartition first byte", 1, 1)?;
@@ -154,7 +157,8 @@ pub struct StoredGridCellDataBlock {
 }
 
 impl StoredGridCellDataBlock {
-    /// Reads a GridCellDataBlock body to its last byte; refuses an empty reference in the list and trailing bytes.
+    /// Reads a GridCellDataBlock body to its last byte; refuses an empty reference in the list and trailing
+    /// bytes.
     pub fn parse(body: &[u8]) -> Result<StoredGridCellDataBlock, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "GridCellDataBlock first byte", 1, 1)?;

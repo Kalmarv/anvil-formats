@@ -90,7 +90,8 @@ impl StoredDecal {
 pub struct StoredDecalItem {
     /// The DDecalStaticInstancers object's id.
     pub id: u64,
-    /// The three bytes after the object header, as stored; the first is the item's model ([`StoredDecalItem::model`]).
+    /// The three bytes after the object header, as stored; the first is the item's model
+    /// ([`StoredDecalItem::model`]).
     pub bytes: [u8; 3],
     /// The item's 100-byte decal records, in stored order.
     pub decals: Vec<StoredDecal>,
@@ -127,7 +128,8 @@ pub struct StoredDecalModel {
     pub textures: [Option<Reference>; 4],
     /// The 20 flag bytes after the textures, as stored.
     pub flags: [u8; 20],
-    /// The 53 bytes of parameters after the flags, as stored; the opacity is the f32 at offset 10 ([`StoredDecalModel::opacity`]).
+    /// The 53 bytes of parameters after the flags, as stored; the opacity is the f32 at offset 10
+    /// ([`StoredDecalModel::opacity`]).
     pub parameters: Vec<u8>,
 }
 

@@ -25,12 +25,14 @@ pub enum BodyError {
         what: &'static str,
         /// The byte offset in the body where the field starts.
         at: usize,
-        /// The value found, widened to `u64`; for a float field, its bit pattern, for a length error, the length.
+        /// The value found, widened to `u64`; for a float field, its bit pattern, for a length error, the
+        /// length.
         found: u64,
         /// What the grammar reads there, in words (for example `"0 or 1"`).
         read: &'static str,
     },
-    /// An embedded 10-byte reference that [`reference::parse`] refused; `at` is the body offset of the reference.
+    /// An embedded 10-byte reference that [`reference::parse`] refused; `at` is the body offset of the
+    /// reference.
     #[error("reference at {at}: {source}")]
     Reference {
         /// The body offset of the reference's first byte.

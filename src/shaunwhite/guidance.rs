@@ -95,7 +95,8 @@ pub enum Error {
     /// The component ends before a field is complete.
     #[error(transparent)]
     Field(#[from] FieldError),
-    /// A field has a value the format does not allow (a wrong class id, a non-finite float, a link or index past its list, or bytes left over); `field` names it.
+    /// A field has a value the format does not allow (a wrong class id, a non-finite float, a link or index
+    /// past its list, or bytes left over); `field` names it.
     #[error("guidance {field}: {why}")]
     Invalid {
         /// The field that was refused.

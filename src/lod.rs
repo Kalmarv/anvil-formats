@@ -40,7 +40,9 @@ pub enum Error {
     /// The body ends before a field is complete.
     #[error("LODSelector body: {0}")]
     Short(#[from] FieldError),
-    /// A field that must have one fixed value (first byte `1`, level marker, dependency tag `0`, repeated dependency count) does not, or the dependency count does not match the leading levels without a reference ([`StoredLodSelector::level_ids`]).
+    /// A field that must have one fixed value (first byte `1`, level marker, dependency tag `0`, repeated
+    /// dependency count) does not, or the dependency count does not match the leading levels without a
+    /// reference ([`StoredLodSelector::level_ids`]).
     #[error("LODSelector {what}: {found}, only {read} is read")]
     Value {
         /// The field that was refused.
@@ -63,7 +65,8 @@ pub enum Error {
 pub struct StoredLevel {
     /// Its first u64 (on both fixtures the selector's ClassID + 13 + the level's index; meaning not established).
     pub head: u64,
-    /// The level's 10-byte reference, or `None` if stored as the empty form; leading levels without one take the selector's dependencies in order.
+    /// The level's 10-byte reference, or `None` if stored as the empty form; leading levels without one take
+    /// the selector's dependencies in order.
     pub reference: Option<Reference>,
     /// The three f32 after the reference, as stored: `SwitchDistance`, `TransitionZoneSize` and
     /// `FadeTimeMultiplier`.

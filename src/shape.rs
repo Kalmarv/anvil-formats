@@ -38,7 +38,8 @@ pub const REFERENCE_LIST_SHAPE: u32 = 0x2D67_5BA2;
 /// Why a shape body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// The body is short, has a changed fixed word, a child count that disagrees with the matrix or vector count, or bytes left over; the inner error names the field and offset.
+    /// The body is short, has a changed fixed word, a child count that disagrees with the matrix or vector
+    /// count, or bytes left over; the inner error names the field and offset.
     #[error("shape {0}")]
     Body(#[from] BodyError),
 }
@@ -56,7 +57,8 @@ pub struct StoredSphere {
 }
 
 impl StoredSphere {
-    /// Reads a SphereShape body (35 bytes) to its last byte; refuses a first byte other than `01`, a nonzero word after it, and trailing bytes.
+    /// Reads a SphereShape body (35 bytes) to its last byte; refuses a first byte other than `01`, a nonzero
+    /// word after it, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredSphere, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "first byte", 1, 1)?;
@@ -85,7 +87,8 @@ pub struct StoredCapsule {
 }
 
 impl StoredCapsule {
-    /// Reads a CapsuleShape body (51 bytes) to its last byte; refuses a first byte other than `01`, a nonzero word after it, and trailing bytes.
+    /// Reads a CapsuleShape body (51 bytes) to its last byte; refuses a first byte other than `01`, a nonzero
+    /// word after it, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredCapsule, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "first byte", 1, 1)?;
@@ -115,7 +118,8 @@ pub struct StoredBox {
 }
 
 impl StoredBox {
-    /// Reads a BoxShape body (95 bytes) to its last byte; refuses a first byte other than `01`, nonzero bytes in the three after the second, and trailing bytes.
+    /// Reads a BoxShape body (95 bytes) to its last byte; refuses a first byte other than `01`, nonzero bytes
+    /// in the three after the second, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredBox, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "first byte", 1, 1)?;
@@ -150,7 +154,8 @@ pub struct StoredReferenceList {
 }
 
 impl StoredReferenceList {
-    /// Reads a ReferenceListShape body to its last byte; refuses an empty child reference, a matrix or vector count that is not the child count, a nonzero word after the first byte, and trailing bytes.
+    /// Reads a ReferenceListShape body to its last byte; refuses an empty child reference, a matrix or vector
+    /// count that is not the child count, a nonzero word after the first byte, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredReferenceList, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "first byte", 1, 1)?;

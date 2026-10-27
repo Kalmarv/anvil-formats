@@ -150,7 +150,8 @@ pub enum Error {
     /// The database ends before a field is complete.
     #[error("{0}")]
     Field(#[from] FieldError),
-    /// A field has a value the format does not allow (a wrong magic or version, sizes that do not tile, a name that is not UTF-8, or bytes left over).
+    /// A field has a value the format does not allow (a wrong magic or version, sizes that do not tile, a
+    /// name that is not UTF-8, or bytes left over).
     #[error("SDB2 {field} at {at:#x}: {why}")]
     Invalid {
         /// The byte offset in the database.

@@ -197,7 +197,8 @@ pub enum Error {
     /// B ran out of raw bits; the count is how many bits were taken before.
     #[error("coded block: B ends after {0} raw bits")]
     RawEnd(u64),
-    /// A decoded or stored value is outside what the code allows (A's first bit, the symbol count, a chunk length, a rank, a unary count).
+    /// A decoded or stored value is outside what the code allows (A's first bit, the symbol count, a chunk
+    /// length, a rank, a unary count).
     #[error("coded block: {what} {found} (read: {read})")]
     Value {
         /// The value refused.

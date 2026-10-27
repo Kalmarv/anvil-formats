@@ -25,13 +25,15 @@ pub enum Error {
     /// Opening or reading a forge file failed at the operating-system level.
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    /// A forge's header, index or name tables are malformed or its payload could not be read; see [`crate::forge::Error`].
+    /// A forge's header, index or name tables are malformed or its payload could not be read; see
+    /// [`crate::forge::Error`].
     #[error(transparent)]
     Forge(#[from] crate::forge::Error),
     /// [`At::forge`] (or a forge position passed in) is not a position in the order given to [`Archive::open`].
     #[error("no forge {0} in the archive")]
     NoForge(usize),
-    /// An entry's data blocks failed to decode or its resource header failed to parse; `forge` and `entry` say which entry.
+    /// An entry's data blocks failed to decode or its resource header failed to parse; `forge` and `entry`
+    /// say which entry.
     #[error("forge {forge}, entry {entry}: {source}")]
     Data {
         /// The forge's position in the order given to [`Archive::open`].

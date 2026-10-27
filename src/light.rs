@@ -38,7 +38,8 @@ const INSTANCE_LENGTH: usize = 311;
 /// Why a SpotLight or LightInstance body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// The body has the wrong length, a wrong LightColor class, or a float that is negative or not finite; the inner error names the field and offset.
+    /// The body has the wrong length, a wrong LightColor class, or a float that is negative or not finite;
+    /// the inner error names the field and offset.
     #[error("light {0}")]
     Body(#[from] BodyError),
 }

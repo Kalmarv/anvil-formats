@@ -66,7 +66,8 @@ pub struct StoredMaterialBank {
 }
 
 impl StoredMaterialBank {
-    /// Reads a TerrainMaterialBank body to its last byte; refuses a first byte other than `01`, a list entry stored as the empty reference, and trailing bytes.
+    /// Reads a TerrainMaterialBank body to its last byte; refuses a first byte other than `01`, a list entry
+    /// stored as the empty reference, and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredMaterialBank, Error> {
         let mut c = Cursor::new(body);
         let [first] = c.array::<1>().field("first byte")?;

@@ -42,7 +42,8 @@ pub enum Error {
     /// The object ends before a field is complete.
     #[error(transparent)]
     Field(#[from] FieldError),
-    /// A field has a value the format does not allow (a wrong class id, a non-finite float, an index past its list, a nesting deeper than 64, or trailing bytes); `field` names it.
+    /// A field has a value the format does not allow (a wrong class id, a non-finite float, an index past its
+    /// list, a nesting deeper than 64, or trailing bytes); `field` names it.
     #[error("collision {field}: {why}")]
     Invalid {
         /// The field that was refused.
@@ -480,7 +481,8 @@ pub struct MultiInertComponent<'a> {
     pub shape: Shape<'a>,
 }
 impl<'a> MultiInertComponent<'a> {
-    /// Reads a whole MultiInertComponent; refuses a wrong class id, a shape that is not a MultiMeshShape and trailing bytes.
+    /// Reads a whole MultiInertComponent; refuses a wrong class id, a shape that is not a MultiMeshShape and
+    /// trailing bytes.
     pub fn parse(bytes: &'a [u8]) -> Result<Self, Error> {
         let (value, used) = Self::parse_prefix(bytes)?;
         if used != bytes.len() {

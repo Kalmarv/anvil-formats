@@ -27,7 +27,8 @@ pub enum Error {
     /// The body ends before a field (flag, image length, image, zero byte, parent or level) is complete.
     #[error("CompiledMip body: {0}")]
     Short(#[from] FieldError),
-    /// A byte that must have one fixed value does not: the flag at offset 0 must be 1 and the byte after the image 0.
+    /// A byte that must have one fixed value does not: the flag at offset 0 must be 1 and the byte after the
+    /// image 0.
     #[error("CompiledMip {what}: {found}, only {read} is read (another value isn't established)")]
     Value {
         /// The field that was refused.

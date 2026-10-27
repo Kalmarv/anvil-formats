@@ -53,7 +53,8 @@ const MAX_ENTRIES: usize = 8192;
 /// Why a controller can't be read, sampled or found.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// The body is short, outside the scalar-path profile this reader reads, or has bytes left over; the inner error names the field and offset.
+    /// The body is short, outside the scalar-path profile this reader reads, or has bytes left over; the
+    /// inner error names the field and offset.
     #[error("controller {0}")]
     Body(#[from] BodyError),
     /// A track whose key times and values don't pair up, or that has none.

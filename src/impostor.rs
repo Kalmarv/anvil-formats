@@ -41,7 +41,8 @@ const TABLE_AT: usize = 115;
 /// Why an Impostor body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// The body is short, malformed or fails one of the Impostor's checks; the inner error names the field and offset.
+    /// The body is short, malformed or fails one of the Impostor's checks; the inner error names the field
+    /// and offset.
     #[error("Impostor {0}")]
     Body(#[from] BodyError),
 }

@@ -132,7 +132,8 @@ impl StoredReferences {
 /// type, and what a payload's fields mean, are RRAssetStudio's labels, not read here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredMaterial {
-    /// The two references at the start: a Material's MaterialTemplate and TextureSet on the fixtures, or `None` where stored as the empty form.
+    /// The two references at the start: a Material's MaterialTemplate and TextureSet on the fixtures, or
+    /// `None` where stored as the empty form.
     pub references: [Option<Reference>; 2],
     /// The 102 bytes after the references (its flags at 20 to 63: [`StoredMaterial::flags`]).
     pub unread: Vec<u8>,
@@ -143,7 +144,8 @@ pub struct StoredMaterial {
 /// One property record.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Property {
-    /// The property's key (u32); a texture property's key is the CRC-32 of the second string of a descriptor in the Material's template ([`crate::template::Descriptor::key`]).
+    /// The property's key (u32); a texture property's key is the CRC-32 of the second string of a descriptor
+    /// in the Material's template ([`crate::template::Descriptor::key`]).
     pub key: u32,
     /// The property's class (u32), echoed inside its payload for the structured payloads.
     pub class: u32,
@@ -209,7 +211,8 @@ pub enum MaterialError {
     /// The first byte or one of the two references at the start is malformed.
     #[error("Material prefix: {0}")]
     Prefix(#[from] Error),
-    /// A property record has a nonzero header u16, a class other than the echo, or a (class, type) not read; `index` is the record's position and `why` says which.
+    /// A property record has a nonzero header u16, a class other than the echo, or a (class, type) not read;
+    /// `index` is the record's position and `why` says which.
     #[error("Material property {index}: {why}")]
     Property {
         /// The record's position.

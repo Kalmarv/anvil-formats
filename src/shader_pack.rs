@@ -14,7 +14,8 @@
 /// Why a shader pack can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// A DXBC container is malformed: its header is shorter than 28 bytes, or its size field runs past the pack.
+    /// A DXBC container is malformed: its header is shorter than 28 bytes, or its size field runs past the
+    /// pack.
     #[error("shader pack container {index} at byte {at}: {why}")]
     Container {
         /// The container's position in the pack, counting from 0.
@@ -24,7 +25,8 @@ pub enum Error {
         /// What is wrong with it: `"short header"` or `"size past the pack"`.
         why: &'static str,
     },
-    /// The container's stored checksum (bytes 4 to 19) is not the checksum of its bytes, or its size field is under 32.
+    /// The container's stored checksum (bytes 4 to 19) is not the checksum of its bytes, or its size field is
+    /// under 32.
     #[error("shader pack container {index} at byte {at}: its checksum isn't its bytes'")]
     Checksum {
         /// The container's position in the pack, counting from 0.
@@ -32,7 +34,8 @@ pub enum Error {
         /// The byte offset in the pack where the container starts.
         at: usize,
     },
-    /// The pack does not end with exactly 16 bytes after its last container; `left` is the number of bytes found there.
+    /// The pack does not end with exactly 16 bytes after its last container; `left` is the number of bytes
+    /// found there.
     #[error("shader pack: {left} bytes after the containers, where its 16-byte MD5 is")]
     Trailer {
         /// The number of bytes found after the last container.

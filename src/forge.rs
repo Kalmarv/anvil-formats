@@ -76,7 +76,8 @@ pub enum Error {
     /// The version field at offset 9 is neither 26 nor 27; the value found.
     #[error("forge version {0}: only versions 26 and 27 are read")]
     Version(i32),
-    /// A version-26 entry's `FILEDATA` header is wrong: bad magic, a name other than the name record's, or ids and size
+    /// A version-26 entry's `FILEDATA` header is wrong: bad magic, a name other than the name record's, or
+    /// ids and size
     /// that differ from its index and name records.
     #[error("entry {index}: its FILEDATA header {why}")]
     FileData {
@@ -97,7 +98,8 @@ pub enum Error {
         /// The file's size in bytes.
         file: u64,
     },
-    /// A count or range in the headers is negative or disagrees with another: the entry count against the index count and `MaxFilesForThisIndex`, or the index range.
+    /// A count or range in the headers is negative or disagrees with another: the entry count against the
+    /// index count and `MaxFilesForThisIndex`, or the index range.
     #[error("{what} {value}: {why}")]
     Count {
         /// Which count.
@@ -107,10 +109,12 @@ pub enum Error {
         /// What is wrong with it.
         why: String,
     },
-    /// `DataHeader2` points to a second FileSet at this offset (it should hold -1); only a forge with one FileSet is read.
+    /// `DataHeader2` points to a second FileSet at this offset (it should hold -1); only a forge with one
+    /// FileSet is read.
     #[error("a second FileSet at {0}: only a forge with one is read")]
     FileSets(i64),
-    /// An entry's payload offset or size is negative, or its payload (with the version-26 `FILEDATA` header) ends past the end of the file.
+    /// An entry's payload offset or size is negative, or its payload (with the version-26 `FILEDATA` header)
+    /// ends past the end of the file.
     #[error("entry {index}: payload offset {offset}, size {size}: {why}")]
     Entry {
         /// The entry's position in the tables.
@@ -195,7 +199,8 @@ pub struct DataHeader2 {
     pub offset_to_next_data_section: i64,
     /// The first index in the index range (i32 at offset 0x18); not negative.
     pub index_start: i32,
-    /// The end of the index range (i32 at offset 0x1c): the index count in version 27, the last of `MaxFilesForThisIndex` records in version 26.
+    /// The end of the index range (i32 at offset 0x1c): the index count in version 27, the last of
+    /// `MaxFilesForThisIndex` records in version 26.
     pub index_end: i32,
     /// Where the name table starts, in bytes from the start of the file (i64 at offset 0x20).
     pub offset_to_name_table: i64,
@@ -206,11 +211,13 @@ pub struct DataHeader2 {
 /// An index record: where an entry's payload is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IndexRecord {
-    /// Where the entry's payload starts, in bytes from the start of the file (i64); in version 26 the payload follows a 440-byte `FILEDATA` header at this offset.
+    /// Where the entry's payload starts, in bytes from the start of the file (i64); in version 26 the payload
+    /// follows a 440-byte `FILEDATA` header at this offset.
     pub offset: i64,
     /// The index table's id (not the name record's); 32 bits in version 26.
     pub id: u64,
-    /// The payload's size in bytes (i32), not counting a version-26 `FILEDATA` header; equals the name record's size.
+    /// The payload's size in bytes (i32), not counting a version-26 `FILEDATA` header; equals the name
+    /// record's size.
     pub size: i32,
 }
 

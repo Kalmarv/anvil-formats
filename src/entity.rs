@@ -78,7 +78,8 @@ const GRASS_SETTINGS: u32 = 0x3BE0_5B93;
 /// Why an Entity body can't be read.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    /// The body is short, has a changed fixed value, or fails a check; the inner error names the field and offset.
+    /// The body is short, has a changed fixed value, or fails a check; the inner error names the field and
+    /// offset.
     #[error("Entity {0}")]
     Body(#[from] BodyError),
     /// A component's type has no length rule, and the Entity's component headers cannot delimit it.
@@ -99,7 +100,8 @@ pub enum Error {
         /// The component's type id.
         kind: u32,
     },
-    /// A component whose type has no length rule is followed by a different number of component headers than the Entity's count says.
+    /// A component whose type has no length rule is followed by a different number of component headers than
+    /// the Entity's count says.
     #[error(
         "Entity component {index}: type {kind:08X} has no length rule and {found} component headers follow, the count says {want}"
     )]

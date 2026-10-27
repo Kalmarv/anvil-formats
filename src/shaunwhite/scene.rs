@@ -75,7 +75,8 @@ pub enum Error {
 pub struct Visual {
     /// The kind byte of the Visual's ResourceRef, as stored.
     pub kind: u8,
-    /// The id of the object the Visual shows: a Mesh, a LODSelector, a light or one of the other classes listed above.
+    /// The id of the object the Visual shows: a Mesh, a LODSelector, a light or one of the other classes
+    /// listed above.
     pub target: u32,
 }
 

@@ -175,7 +175,8 @@ const OBJECTS: [(u32, usize); 5] = [
 /// Why a BuildTable body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// The body is short, has a changed fixed value, or fails a check; the inner error names the field and offset.
+    /// The body is short, has a changed fixed value, or fails a check; the inner error names the field and
+    /// offset.
     #[error("build table {0}")]
     Body(#[from] BodyError),
     /// A typed value's kind has no known width; `at` is the offset of the kind word.
@@ -186,7 +187,8 @@ pub enum Error {
         /// The body offset of the kind word.
         at: usize,
     },
-    /// An embedded object's class is not one of the five whose body length is known; `at` is the offset of the object.
+    /// An embedded object's class is not one of the five whose body length is known; `at` is the offset of
+    /// the object.
     #[error("build table object of class {class:#010x} at {at} isn't read")]
     Class {
         /// The class id found.

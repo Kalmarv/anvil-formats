@@ -150,7 +150,8 @@ pub enum Error {
     /// The body ends before a field is complete.
     #[error("TextureMap body: {0}")]
     Short(#[from] FieldError),
-    /// A value that must be fixed is another (first byte `1`, the compiled header's marker and flag, a reference tag `0`, or a dimension outside 1 to 3).
+    /// A value that must be fixed is another (first byte `1`, the compiled header's marker and flag, a
+    /// reference tag `0`, or a dimension outside 1 to 3).
     #[error("TextureMap {what}: {found}, only {read} is read")]
     Value {
         /// The field refused.
@@ -170,7 +171,8 @@ pub enum Error {
         /// The value in the head.
         stored: u32,
     },
-    /// The pixel bytes do not match their stated length, or do not fill the mip levels the head implies; `why` says which.
+    /// The pixel bytes do not match their stated length, or do not fill the mip levels the head implies;
+    /// `why` says which.
     #[error("TextureMap pixels: {why}")]
     Pixels {
         /// What does not match.
@@ -194,11 +196,13 @@ pub struct StoredTextureMap {
     pub height: u32,
     /// The engine's format code ([`format()`]).
     pub format: u32,
-    /// The u32 at offset 9 (depth, the reference tool's name); multiplied into the layer count ([`StoredTextureMap::layers`]).
+    /// The u32 at offset 9 (depth, the reference tool's name); multiplied into the layer count
+    /// ([`StoredTextureMap::layers`]).
     pub depth: u32,
     /// The u32 at offset 13 (array size, the reference tool's name); multiplied into the layer count.
     pub array_size: u32,
-    /// The u32 at offset 21: 1 flat, 2 cube (six layers per array slice and depth), 3 volume; another is refused.
+    /// The u32 at offset 21: 1 flat, 2 cube (six layers per array slice and depth), 3 volume; another is
+    /// refused.
     pub dimension: u32,
     /// The u32 at 25, as stored (1 on map 217, 0 on 218 and 31; what it selects is not established).
     pub field_25: u32,

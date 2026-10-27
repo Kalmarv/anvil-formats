@@ -117,7 +117,8 @@ pub struct SlotSpec {
     pub name: &'static str,
     /// The offset in the body of the slot's TextureMapSpec id (a u32).
     pub at: usize,
-    /// Whether the slot carries five layer floats (scale u, scale v, offset u, offset v, rotation) and two TexMapMode words after its id.
+    /// Whether the slot carries five layer floats (scale u, scale v, offset u, offset v, rotation) and two
+    /// TexMapMode words after its id.
     pub layer: bool,
 }
 
@@ -201,7 +202,8 @@ pub struct Slot {
     pub rotation: f32,
     /// The UV channel (0 or 1) of the slots `mask`, `diffuse_b` and `diffuse_c`; 0 for every other slot.
     pub texcoord: u8,
-    /// The two TexMapMode words of a layer slot (0 wrap, 1 clamp, 2 border), or `None` for a slot without layer floats.
+    /// The two TexMapMode words of a layer slot (0 wrap, 1 clamp, 2 border), or `None` for a slot without
+    /// layer floats.
     pub address: Option<[u32; 2]>,
 }
 

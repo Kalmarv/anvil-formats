@@ -120,13 +120,15 @@ pub enum Error {
         /// The track kind.
         kind: u8,
     },
-    /// A track's values do not decode: their count is not the key count, or a packed value has a bit set that must be clear.
+    /// A track's values do not decode: their count is not the key count, or a packed value has a bit set that
+    /// must be clear.
     #[error("animation track values: {0}")]
     Values(String),
     /// Bytes remain after the last track; the count is how many.
     #[error("animation body: {0} bytes after its last track")]
     Trailing(usize),
-    /// The event array's `count` elements were skipped without finding the `AnimTrackData` object that follows them.
+    /// The event array's `count` elements were skipped without finding the `AnimTrackData` object that
+    /// follows them.
     #[error("animation events: no AnimTrackData after the {0} events")]
     NoTrackData(u32),
 }
@@ -200,7 +202,8 @@ pub struct StoredTrack {
     pub keys: u32,
     /// The key times as stored.
     pub times: Times,
-    /// The `keys` values of the kind's width ([`value_width`]), as bytes; [`StoredTrack::values`] decodes some kinds.
+    /// The `keys` values of the kind's width ([`value_width`]), as bytes; [`StoredTrack::values`] decodes
+    /// some kinds.
     pub values: Vec<u8>,
 }
 

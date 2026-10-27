@@ -14,7 +14,9 @@ use primase_foundations::bytes::{Endian, View};
 /// Material flag word, not a shader key. Texture presence follows the stored slots, including unread textures.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MaterialShader {
-    /// The runtime Material flag word rebuilt from the body: blend in the low bits, the bool at 25 as bit 4, the bool at 26 as bit 5, the alpha reference from bit 6, the display mode from bit 14, the bools at 32 to 43 as bits 16 to 27 and those at 44 and 45 as bits 29 and 30.
+    /// The runtime Material flag word rebuilt from the body: blend in the low bits, the bool at 25 as bit 4,
+    /// the bool at 26 as bit 5, the alpha reference from bit 6, the display mode from bit 14, the bools at 32
+    /// to 43 as bits 16 to 27 and those at 44 and 45 as bits 29 and 30.
     pub flags: u32,
     /// The two bools at offsets 122 and 123.
     pub layers: [bool; 2],
@@ -30,9 +32,11 @@ pub struct MaterialShader {
     pub hide: u32,
     /// The dynamic UV mode word at offset 496: 0, 1 or 2.
     pub dynamic_uv: u32,
-    /// The names of the slots the Material stores a texture spec for ([`super::material::Slot::name`]), in body order.
+    /// The names of the slots the Material stores a texture spec for ([`super::material::Slot::name`]), in
+    /// body order.
     pub texture_slots: Vec<String>,
-    /// Names of stored features this reader does not cover (a video texture, a multi-texture set, non-normal alpha-display fields); empty when none is set.
+    /// Names of stored features this reader does not cover (a video texture, a multi-texture set, non-normal
+    /// alpha-display fields); empty when none is set.
     pub unsupported: Vec<String>,
 }
 const LE: Endian = Endian::Little;

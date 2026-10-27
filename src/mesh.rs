@@ -123,7 +123,8 @@ pub enum Error {
     /// The body ends before a field is complete.
     #[error("Mesh body: {0}")]
     Short(#[from] FieldError),
-    /// The u32 where the compiled mesh's marker should be (offset 61 + 81 c for c bone records) is not `0xFC9E1595`.
+    /// The u32 where the compiled mesh's marker should be (offset 61 + 81 c for c bone records) is not
+    /// `0xFC9E1595`.
     #[error("Mesh body: {found:#010x} at {at}, not the compiled mesh marker 0xFC9E1595")]
     Marker {
         /// The u32 found there.
@@ -131,7 +132,8 @@ pub enum Error {
         /// Its offset in the body.
         at: usize,
     },
-    /// The compiled mesh's layout id (marker+13) and layout byte (marker+4) are not one of the two pairs read: `0xC351EE43` with 0 (ranged) or `0x0645ABB5` with 3 (inline).
+    /// The compiled mesh's layout id (marker+13) and layout byte (marker+4) are not one of the two pairs
+    /// read: `0xC351EE43` with 0 (ranged) or `0x0645ABB5` with 3 (inline).
     #[error(
         "Mesh compiled layout {id:#010x} at marker+13, byte {flags} at marker+4: only 0xC351EE43 with 0 (ranged) and \
          0x0645ABB5 with 3 (inline) are read"
@@ -145,7 +147,8 @@ pub enum Error {
     /// The three u32 at marker+22, +26 and +30 are not a stride triple this reader reads.
     #[error("Mesh u32s at marker+22, +26 and +30: {0:?}, not a stride triple read")]
     Stride([u32; 3]),
-    /// A range record, `MeshPrimitive` entry or material descriptor is malformed or disagrees with its range; `index` is its position and `why` says what.
+    /// A range record, `MeshPrimitive` entry or material descriptor is malformed or disagrees with its range;
+    /// `index` is its position and `why` says what.
     #[error("Mesh range record {index}: {why}")]
     Record {
         /// The record's position.
@@ -153,7 +156,8 @@ pub enum Error {
         /// What is wrong with it.
         why: String,
     },
-    /// A `MeshBone` record is malformed; `index` is its position (0 when a record is parsed on its own) and `why` says what.
+    /// A `MeshBone` record is malformed; `index` is its position (0 when a record is parsed on its own) and
+    /// `why` says what.
     #[error("Mesh bone record {index}: {why}")]
     Bone {
         /// The record's position.
@@ -161,7 +165,8 @@ pub enum Error {
         /// What is wrong with it.
         why: String,
     },
-    /// A vertex, index or skin buffer is cut short, runs past the body, or does not partition into the ranges; `what` names the buffer.
+    /// A vertex, index or skin buffer is cut short, runs past the body, or does not partition into the
+    /// ranges; `what` names the buffer.
     #[error("Mesh {what}: {why}")]
     Buffer {
         /// Which buffer.

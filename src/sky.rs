@@ -43,9 +43,11 @@ pub struct StoredSky {
     pub sun_color: [f32; 4],
     /// The sun intensity (f32 at offset 64), as stored.
     pub sun_intensity: f32,
-    /// The three Mie phase settings (f32), as stored: at offsets 350, 354 and 358 in the 24-keyframe profile and 340, 344 and 348 in the one-keyframe profile.
+    /// The three Mie phase settings (f32), as stored: at offsets 350, 354 and 358 in the 24-keyframe profile
+    /// and 340, 344 and 348 in the one-keyframe profile.
     pub mie: [f32; 3],
-    /// The keyframes in stored order, one one per authored time of day (24 in the 3,442,710-byte profile, 1 in the 143,994-byte one).
+    /// The keyframes in stored order, one one per authored time of day (24 in the 3,442,710-byte profile, 1
+    /// in the 143,994-byte one).
     pub keyframes: Vec<SkyKeyframe>,
 }
 /// The LayeredSky type id.
@@ -60,7 +62,8 @@ const AMBIANCE_LENGTH: usize = 5277;
 /// Why a sky body can't be read or sampled.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// The body is short, has an unestablished length, or fails one of the layout's checks; the inner error names the field and offset.
+    /// The body is short, has an unestablished length, or fails one of the layout's checks; the inner error
+    /// names the field and offset.
     #[error("sky {0}")]
     Body(#[from] BodyError),
     /// Sampling needs a finite hour and at least one keyframe.

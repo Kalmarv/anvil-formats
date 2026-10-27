@@ -59,7 +59,8 @@ pub enum Error {
         /// The compression version found.
         version: u16,
     },
-    /// The version and algorithm byte (offset 10) are not a pair read: version 2 with 5 (zstd) or version 1 with 2 (LZO2A).
+    /// The version and algorithm byte (offset 10) are not a pair read: version 2 with 5 (zstd) or version 1
+    /// with 2 (LZO2A).
     #[error(
         "block at {at}: compression version {version}, algorithm {algorithm}: only 2 with 5 (zstd) and 1 with 2 (LZO2A) are read"
     )]
@@ -71,7 +72,8 @@ pub enum Error {
         /// The algorithm byte found.
         algorithm: u8,
     },
-    /// The block's chunk count is zero, past this machine's address space, or more than the bytes can hold; `why` says which.
+    /// The block's chunk count is zero, past this machine's address space, or more than the bytes can hold;
+    /// `why` says which.
     #[error("block at {at}: {count} chunks: {why}")]
     Chunks {
         /// The offset of the block in the entry.
@@ -81,7 +83,8 @@ pub enum Error {
         /// What is wrong with the count.
         why: &'static str,
     },
-    /// A chunk's sizes are unusable: past this machine's address space, over the bound given to [`read_block`], or a chunk running past the entry.
+    /// A chunk's sizes are unusable: past this machine's address space, over the bound given to
+    /// [`read_block`], or a chunk running past the entry.
     #[error("block at {at}, chunk {chunk}: stored size {stored}, decoded size {decoded}: {why}")]
     Size {
         /// The offset of the block in the entry.
@@ -127,7 +130,8 @@ pub enum Error {
     /// The two blocks end before the entry does; the count is how many bytes follow.
     #[error("the entry has {0} bytes after its two blocks")]
     Trailing(usize),
-    /// The resource block's header is malformed or its lengths disagree with the block's size; the string says what.
+    /// The resource block's header is malformed or its lengths disagree with the block's size; the string
+    /// says what.
     #[error("resource: {0}")]
     Resource(String),
 }
@@ -137,7 +141,8 @@ pub enum Error {
 pub struct Chunk {
     /// The size in bytes the chunk decodes to.
     pub decoded_size: u32,
-    /// The size in bytes the chunk occupies in the block; a chunk with `stored_size == decoded_size` is stored raw.
+    /// The size in bytes the chunk occupies in the block; a chunk with `stored_size == decoded_size` is
+    /// stored raw.
     pub stored_size: u32,
     /// The Adler-32 checksum (starting value 0) of the stored bytes, as stored and verified.
     pub checksum: u32,
