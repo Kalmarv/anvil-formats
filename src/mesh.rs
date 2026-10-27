@@ -120,25 +120,63 @@ pub const MATERIAL: u32 = 0x85C8_17C3;
 /// Why a Mesh body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body ends before a field is complete.
     #[error("Mesh body: {0}")]
     Short(#[from] FieldError),
+    /// The u32 where the compiled mesh's marker should be (offset 61 + 81 c for c bone records) is not `0xFC9E1595`.
     #[error("Mesh body: {found:#010x} at {at}, not the compiled mesh marker 0xFC9E1595")]
-    Marker { found: u32, at: usize },
+    Marker {
+        /// The u32 found there.
+        found: u32,
+        /// Its offset in the body.
+        at: usize,
+    },
+    /// The compiled mesh's layout id (marker+13) and layout byte (marker+4) are not one of the two pairs read: `0xC351EE43` with 0 (ranged) or `0x0645ABB5` with 3 (inline).
     #[error(
         "Mesh compiled layout {id:#010x} at marker+13, byte {flags} at marker+4: only 0xC351EE43 with 0 (ranged) and \
          0x0645ABB5 with 3 (inline) are read"
     )]
-    Layout { id: u32, flags: u8 },
+    Layout {
+        /// The layout id found at marker+13.
+        id: u32,
+        /// The byte found at marker+4.
+        flags: u8,
+    },
+    /// The three u32 at marker+22, +26 and +30 are not a stride triple this reader reads.
     #[error("Mesh u32s at marker+22, +26 and +30: {0:?}, not a stride triple read")]
     Stride([u32; 3]),
+    /// A range record, `MeshPrimitive` entry or material descriptor is malformed or disagrees with its range; `index` is its position and `why` says what.
     #[error("Mesh range record {index}: {why}")]
-    Record { index: usize, why: String },
+    Record {
+        /// The record's position.
+        index: usize,
+        /// What is wrong with it.
+        why: String,
+    },
+    /// A `MeshBone` record is malformed; `index` is its position (0 when a record is parsed on its own) and `why` says what.
     #[error("Mesh bone record {index}: {why}")]
-    Bone { index: usize, why: String },
+    Bone {
+        /// The record's position.
+        index: usize,
+        /// What is wrong with it.
+        why: String,
+    },
+    /// A vertex, index or skin buffer is cut short, runs past the body, or does not partition into the ranges; `what` names the buffer.
     #[error("Mesh {what}: {why}")]
-    Buffer { what: &'static str, why: String },
+    Buffer {
+        /// Which buffer.
+        what: &'static str,
+        /// What is wrong with it.
+        why: String,
+    },
+    /// The material list or one of the four runs after the primitives is malformed; `what` names the part.
     #[error("Mesh tail {what}: {why}")]
-    Tail { what: &'static str, why: String },
+    Tail {
+        /// Which part of the tail.
+        what: &'static str,
+        /// What is wrong with it.
+        why: String,
+    },
 }
 
 /// A range record as stored.
@@ -158,7 +196,9 @@ pub struct RangeRecord {
 /// each vertex's first 8 bytes are decoded ([`StoredVertices::positions`]); what the rest hold is not established.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredVertices {
+    /// The size of one vertex in bytes: 16, 24 or 28 in the ranged layout, 24 in the inline one.
     pub stride: usize,
+    /// The vertex buffer's bytes, `stride` per vertex, as stored.
     pub bytes: Vec<u8>,
 }
 
@@ -168,6 +208,7 @@ impl StoredVertices {
         self.bytes.len().checked_div(self.stride).unwrap_or(0)
     }
 
+    /// Whether the buffer holds no vertex.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -235,18 +276,24 @@ impl StoredVertices {
 /// One range of a Mesh's buffers: its stored indices count from `vertices.start`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MeshRange {
+    /// The range's indices, as positions in [`StoredMesh::indices`].
     pub indices: Range<usize>,
+    /// The range's vertices, as positions in the vertex buffer; its stored indices count from `vertices.start`.
     pub vertices: Range<usize>,
 }
 
 /// One `MeshPrimitive` entry as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredPrimitive {
+    /// The vertex base of the entry's range (u32), as stored.
     pub vertex_base: u32,
     /// The u32 after the vertex base (0 on every entry seen).
     pub reserved: u32,
+    /// The number of vertices in the range (u32).
     pub vertex_count: u32,
+    /// The first index of the range (u32).
     pub first_index: u32,
+    /// The number of triangles in the range (u32).
     pub triangle_count: u32,
     /// The 8 bytes after an entry in the ranged layout's tail (none after the inline layout's).
     pub rest: Option<[u8; 8]>,
@@ -270,6 +317,7 @@ pub struct MaterialDescriptor {
 pub struct MaterialList {
     /// The 8 bytes after the first range count.
     pub head: [u8; 8],
+    /// One descriptor per range, in range order.
     pub descriptors: Vec<MaterialDescriptor>,
     /// The 6 bytes after the second range count.
     pub groups_head: [u8; 6],
@@ -284,6 +332,7 @@ pub struct MaterialList {
 pub struct Ranged {
     /// The compiled mesh's bytes from its marker to its first range record (75).
     pub compiled_head: Vec<u8>,
+    /// The range records, in stored order.
     pub records: Vec<RangeRecord>,
     /// The tail's 32-byte blocks, one per range.
     pub blocks: Vec<[u8; 32]>,
@@ -291,6 +340,7 @@ pub struct Ranged {
     pub blocks_gap: [u8; 8],
     /// `MeshData`'s 18 bytes after its marker.
     pub mesh_data: [u8; 18],
+    /// One `MeshPrimitive` entry per range, in range order.
     pub primitives: Vec<StoredPrimitive>,
     /// The four runs after the last entry, each a u32 length and that many bytes, as stored (on 3,984 meshes of Riders
     /// Republic the first and fourth are as long as the vertex and index buffers, which RRAssetStudio calls CPU
@@ -302,7 +352,9 @@ pub struct Ranged {
 /// count N, and N object records (8 zero bytes and a `MeshPrimitive` entry), which tile both buffers in order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Inline {
+    /// `MeshData`'s 6 bytes after its marker; the first is the index width (0: 2-byte indices, 1: 4-byte).
     pub declaration: [u8; 6],
+    /// The `MeshPrimitive` entries (one on the meshes read), which tile both buffers in order.
     pub primitives: Vec<StoredPrimitive>,
 }
 
@@ -388,7 +440,9 @@ pub struct StoredMesh {
     pub bounds: [[f32; 3]; 2],
     /// The 8 bytes after the compiled mesh's layout byte (marker+5).
     pub compiled_flags: [u8; 8],
+    /// The compiled mesh's layout and the fields that go with it.
     pub layout: Layout,
+    /// The vertex buffer.
     pub vertices: StoredVertices,
     /// The compiled mesh's kind byte (marker+21 ranged; the declaration's second byte inline): 2 on every
     /// single-stream 24-byte mesh, 11 for 16-byte, 3 for 28-byte, 0 and 1 for the split layouts.
@@ -401,6 +455,7 @@ pub struct StoredMesh {
     pub skin_stream: Vec<u8>,
     /// The indices (u16 in the ranged layout, u32 in the inline).
     pub indices: Vec<u32>,
+    /// The material list that ends the body.
     pub material_list: MaterialList,
 }
 
