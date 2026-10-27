@@ -1,5 +1,6 @@
-//! A Material's or TextureSet's body: the two references it starts with, and the rest as stored. What a reference is
-//! for (its slot's role) is not read; nor is anything after the two.
+//! A Material's or TextureSet's body: [`StoredReferences`] reads the two references both start with and keeps the rest
+//! as stored; [`StoredMaterial`] and [`StoredTextureSet`] read the whole bodies. What a reference is for (its slot's
+//! role) is not read.
 //!
 //! The body (little-endian, after the resource's class id and extension): a byte (1), then two 10-byte references
 //! ([`crate::reference`]: `01`, a byte and a u64 ClassID, or `03` and nine zeros for none), then the rest. No
@@ -27,8 +28,11 @@ use primase_foundations::bytes::{Cursor, Field, FieldError};
 /// `AlphaTestValue` and 35 booleans, a byte each.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaterialFlags {
+    /// `BlendMode` (u32 at body offset 41), as stored.
     pub blend_mode: u32,
+    /// `AlphaDisplayMode` (u32 at body offset 45), as stored.
     pub alpha_display_mode: u32,
+    /// `AlphaTestValue` (u8 at body offset 49), as stored.
     pub alpha_test_value: u8,
     /// Boolean j at body 50 + j.
     pub booleans: [u8; 35],
@@ -37,13 +41,21 @@ pub struct MaterialFlags {
 impl MaterialFlags {
     /// Booleans by their registry names (index j).
     pub const Z_WRITE_DISABLED_OPAQUE: usize = 0;
+    /// Index 1: depth writes are disabled for the alpha pass.
     pub const Z_WRITE_DISABLED_ALPHA: usize = 1;
+    /// Index 2: the depth test is disabled.
     pub const Z_TEST_DISABLED: usize = 2;
+    /// Index 3: the Material is a layer material.
     pub const LAYER_MATERIAL: usize = 3;
+    /// Index 10: the Material is drawn before the transparent pass.
     pub const PRE_TRANSPARENT: usize = 10;
+    /// Index 11: the normal is flipped on back faces.
     pub const FLIP_NORMAL_ON_BACK_FACE: usize = 11;
+    /// Index 15: the Material is rendered in low resolution.
     pub const RENDER_IN_LOW_RESOLUTION: usize = 15;
+    /// Index 24: alpha testing is enabled (see `alpha_test_value`).
     pub const ALPHA_TEST_ENABLED: usize = 24;
+    /// Index 25: the Material is drawn two-sided.
     pub const TWO_SIDED: usize = 25;
     /// The boolean whose name's CRC-32 is `42452A12` (the name not known).
     pub const BOOLEAN_42452A12: usize = 34;
@@ -59,13 +71,24 @@ pub const MATERIAL_TEMPLATE: u32 = 0xBCFB_3C7A;
 /// Why a Material or TextureSet body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is shorter than the first byte and two references (21 bytes).
     #[error("reference body: {have} bytes, shorter than its two references (21)")]
-    Short { have: usize },
+    Short {
+        /// The body's length in bytes.
+        have: usize,
+    },
+    /// The first byte is not 1.
     #[error("reference body: byte {found} at 0, only 1 is read")]
-    First { found: u8 },
+    First {
+        /// The first byte found.
+        found: u8,
+    },
+    /// One of the two references is malformed.
     #[error("reference body: reference {index}: {source}")]
     Reference {
+        /// Which reference, 0 or 1.
         index: usize,
+        /// Why it was refused.
         #[source]
         source: crate::reference::Error,
     },
@@ -109,18 +132,24 @@ impl StoredReferences {
 /// type, and what a payload's fields mean, are RRAssetStudio's labels, not read here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredMaterial {
+    /// The two references at the start: a Material's MaterialTemplate and TextureSet on the fixtures, or `None` where stored as the empty form.
     pub references: [Option<Reference>; 2],
     /// The 102 bytes after the references (its flags at 20 to 63: [`StoredMaterial::flags`]).
     pub unread: Vec<u8>,
+    /// The property records, in stored order.
     pub properties: Vec<Property>,
 }
 
 /// One property record.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Property {
+    /// The property's key (u32); a texture property's key is the CRC-32 of the second string of a descriptor in the Material's template ([`crate::template::Descriptor::key`]).
     pub key: u32,
+    /// The property's class (u32), echoed inside its payload for the structured payloads.
     pub class: u32,
+    /// The property's type (u32); with the class it selects the payload.
     pub kind: u32,
+    /// The payload the (class, type) selects.
     pub payload: Payload,
 }
 
@@ -137,32 +166,58 @@ pub enum Payload {
     /// (0x7D08460D, 19), 45 bytes: 8 bytes, the class again, a byte, three u32, two references (the second a
     /// TextureMap on the fixtures).
     Texture {
+        /// The 8 bytes before the echoed class, as stored.
         head: [u8; 8],
+        /// The byte after the echoed class, as stored.
         byte: u8,
+        /// The three u32 after the byte, as stored.
         words: [u32; 3],
+        /// The two references that end the payload (the second is a TextureMap on the fixtures).
         references: [Option<Reference>; 2],
     },
     /// (0xC52E2125, 19), 47 bytes: 8 bytes, the class again, eight f32, three bytes.
     Floats8 {
+        /// The 8 bytes before the echoed class, as stored.
         head: [u8; 8],
+        /// The eight f32 after the echoed class, as stored.
         floats: [f32; 8],
+        /// The three bytes ending the payload, as stored.
         bytes: [u8; 3],
     },
     /// (0xECE5D96C, 19), 36 bytes: 8 bytes, the class again, six f32.
-    Floats6 { head: [u8; 8], floats: [f32; 6] },
+    Floats6 {
+        /// The 8 bytes before the echoed class, as stored.
+        head: [u8; 8],
+        /// The six f32 after the echoed class, as stored.
+        floats: [f32; 6],
+    },
     /// (0xBC0F16F5, 19), 45 bytes: 8 bytes, the class again, 33 bytes kept.
-    Raw45 { head: [u8; 8], rest: Vec<u8> },
+    Raw45 {
+        /// The 8 bytes before the echoed class, as stored.
+        head: [u8; 8],
+        /// The 33 bytes after the echoed class, as stored.
+        rest: Vec<u8>,
+    },
 }
 
 /// Why a Material body can't be read whole.
 #[derive(Debug, thiserror::Error)]
 pub enum MaterialError {
+    /// The body ends before a field is complete.
     #[error("Material body: {0}")]
     Short(#[from] FieldError),
+    /// The first byte or one of the two references at the start is malformed.
     #[error("Material prefix: {0}")]
     Prefix(#[from] Error),
+    /// A property record has a nonzero header u16, a class other than the echo, or a (class, type) not read; `index` is the record's position and `why` says which.
     #[error("Material property {index}: {why}")]
-    Property { index: usize, why: String },
+    Property {
+        /// The record's position.
+        index: usize,
+        /// What is wrong with it.
+        why: String,
+    },
+    /// Bytes remain after the last property; the count is how many.
     #[error("Material body: {0} bytes after its last property")]
     Trailing(usize),
 }
@@ -310,13 +365,25 @@ pub struct StoredTextureSet {
 /// Why a TextureSet body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum TextureSetError {
+    /// The body is not 204 bytes; the length found.
     #[error("TextureSet body: {0} bytes, not 204")]
     Length(usize),
+    /// A byte that must be fixed is another: the first byte must be 1 and the byte at offset 191 must be 0.
     #[error("TextureSet body: byte {found} at {at}, only {read} is read")]
-    Byte { at: usize, found: u8, read: u8 },
+    Byte {
+        /// The byte's offset in the body.
+        at: usize,
+        /// The byte found.
+        found: u8,
+        /// The only value this reader accepts there.
+        read: u8,
+    },
+    /// One of the 19 references is malformed.
     #[error("TextureSet reference {index}: {source}")]
     Reference {
+        /// Which reference, counting from 0.
         index: usize,
+        /// Why it was refused.
         #[source]
         source: crate::reference::Error,
     },
