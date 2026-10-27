@@ -111,7 +111,9 @@ pub enum Format {
 /// How a format code's levels are stored: bytes per 4x4 block, or bytes per pixel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Storage {
+    /// Block-compressed: each 4x4-texel block takes this many bytes (8 or 16).
     Blocks(u32),
+    /// Uncompressed: each texel takes this many bytes (1, 4 or 8).
     Pixels(u32),
 }
 
@@ -145,22 +147,35 @@ pub fn storage(code: u32) -> Option<Storage> {
 /// Why a TextureMap body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body ends before a field is complete.
     #[error("TextureMap body: {0}")]
     Short(#[from] FieldError),
+    /// A value that must be fixed is another (first byte `1`, the compiled header's marker and flag, a reference tag `0`, or a dimension outside 1 to 3).
     #[error("TextureMap {what}: {found}, only {read} is read")]
     Value {
+        /// The field refused.
         what: &'static str,
+        /// The value found.
         found: u64,
+        /// The value this reader accepts there.
         read: u64,
     },
+    /// A field repeated in the compiled header differs from the same field in the head.
     #[error("TextureMap compiled header: {what} {found}, the header's {stored}")]
     Compiled {
+        /// The field.
         what: &'static str,
+        /// The value in the compiled header.
         found: u32,
+        /// The value in the head.
         stored: u32,
     },
+    /// The pixel bytes do not match their stated length, or do not fill the mip levels the head implies; `why` says which.
     #[error("TextureMap pixels: {why}")]
-    Pixels { why: String },
+    Pixels {
+        /// What does not match.
+        why: String,
+    },
 }
 
 /// A reference to an external mip level as stored.
@@ -173,16 +188,21 @@ pub struct MipReference {
 /// A TextureMap body as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredTextureMap {
+    /// The width in texels of level 0 (u32 at offset 1).
     pub width: u32,
+    /// The height in texels of level 0 (u32 at offset 5).
     pub height: u32,
     /// The engine's format code ([`format()`]).
     pub format: u32,
-    /// The u32s at 9, 13 and 21: depth, array size and dimension (the reference tool's names).
+    /// The u32 at offset 9 (depth, the reference tool's name); multiplied into the layer count ([`StoredTextureMap::layers`]).
     pub depth: u32,
+    /// The u32 at offset 13 (array size, the reference tool's name); multiplied into the layer count.
     pub array_size: u32,
+    /// The u32 at offset 21: 1 flat, 2 cube (six layers per array slice and depth), 3 volume; another is refused.
     pub dimension: u32,
     /// The u32 at 25, as stored (1 on map 217, 0 on 218 and 31; what it selects is not established).
     pub field_25: u32,
+    /// The number of mip levels the map has in all, including those in external CompiledMips.
     pub mip_count: u32,
     /// The 14 bytes after the mip count.
     pub head_rest: [u8; 14],

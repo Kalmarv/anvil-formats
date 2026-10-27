@@ -180,22 +180,32 @@ const TRANSITION: [(u8, u8); 64] = [
 /// Why a block can't be decoded.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The block is shorter than 4 bytes, so has no length word; the block's length is given.
     #[error("coded block: {0} bytes, too short for its length word")]
     Short(usize),
+    /// The block's first u32 `n` (where A ends and B begins) is under 4 or past the block's `len`.
     #[error("coded block: A ends at {n}, outside the block of {len} bytes")]
     Split { n: usize, len: usize },
+    /// The arithmetic decoder read past the end of the block.
     #[error("coded block: the decoder reads past the block's end")]
     PastBlock,
+    /// B ran out of raw bits; the count is how many bits were taken before.
     #[error("coded block: B ends after {0} raw bits")]
     RawEnd(u64),
+    /// A decoded or stored value is outside what the code allows (A's first bit, the symbol count, a chunk length, a rank, a unary count).
     #[error("coded block: {what} {found} (read: {read})")]
     Value {
+        /// The value refused.
         what: &'static str,
+        /// The value found.
         found: u64,
+        /// What the code reads there, in words.
         read: &'static str,
     },
+    /// A height or its running sum overflowed `i64`.
     #[error("coded block: height sums overflow")]
     Overflow,
+    /// An LZ4 tile failed to decompress to its fixed size.
     #[error("LZ4 tile: {0}")]
     Lz4(#[from] primase_foundations::compress::Error),
 }
@@ -328,9 +338,13 @@ fn split(block: &[u8]) -> Result<(&[u8], &[u8]), Error> {
 /// A decoded raster: its chunk length, palette, samples row by row, and the raw bits it read from B.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Raster {
+    /// The chunk length (the first 32 raw bits of B): how many samples share one run decision.
     pub chunk: u32,
+    /// The palette bytes, in stored order; the decoder's symbols are these, ranked from 1.
     pub palette: Vec<u8>,
+    /// The decoded byte values, [`SAMPLES`] of them, row by row.
     pub samples: Vec<u8>,
+    /// How many bits of B the decoding consumed.
     pub raw_bits: u64,
     /// B's length in bytes.
     pub b_bytes: usize,
@@ -433,8 +447,11 @@ pub fn raster(block: &[u8], order: &[u16]) -> Result<Raster, Error> {
 /// at the node's level), and the raw bits it read from B.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Heights {
+    /// The decoded heights, [`SAMPLES`] of them, row by row, after the running sums.
     pub values: Vec<i64>,
+    /// How many bits of B the decoding consumed.
     pub raw_bits: u64,
+    /// The length of B in bytes.
     pub b_bytes: usize,
 }
 
