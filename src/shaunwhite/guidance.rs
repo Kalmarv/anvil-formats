@@ -51,16 +51,25 @@ use primase_foundations::bytes::{Cursor, Endian, Field, FieldError};
 use super::scene::RESOURCE_REF;
 
 const LE: Endian = Endian::Little;
+/// The class id of an SWSkateGuidanceSystem component.
 pub const SW_GUIDANCE_SYSTEM: u32 = 0x5CDC_A222;
+/// The class id of a GuidanceObject, one edge.
 pub const GUIDANCE_OBJECT: u32 = 0x344F_A659;
+/// The class id of the SWSkateGuidanceObjectData inline in each GuidanceObject.
 pub const SW_GUIDANCE_OBJECT_DATA: u32 = 0x98A5_3374;
+/// The class id of an SWSkateFreeFormGuidanceSystem component.
 pub const FREE_FORM_GUIDANCE_SYSTEM: u32 = 0x359B_E54E;
+/// The class id of an SWSkateScaleGuidanceSystem component.
 pub const SCALE_GUIDANCE_SYSTEM: u32 = 0x6A1C_FF2F;
+/// The class id of an SWSkateMorphGuidanceSystem component.
 pub const MORPH_GUIDANCE_SYSTEM: u32 = 0x081A_F61A;
 /// The edge filter and partitioner after the points, a partitioner's nodes, and a morph system's states.
 pub const EDGE_FILTER: u32 = 0xDF7F_F220;
+/// The class id of the partitioner (a spatial index of the edges) that follows the edge filter.
 pub const PARTITIONER: u32 = 0x4661_AAEF;
+/// The class id of a partitioner node.
 pub const PART_NODE: u32 = 0x5374_195C;
+/// The class id of one state of a morph system.
 pub const MORPH_TARGET_DATA: u32 = 0xCB13_AC37;
 /// A link that joins nothing.
 pub const NO_LINK: u32 = 0x1FFF;
@@ -80,12 +89,20 @@ pub const SUB_TYPES: [&str; 10] = [
     "curved_vert",
 ];
 
+/// Why a guidance component can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The component ends before a field is complete.
     #[error(transparent)]
     Field(#[from] FieldError),
+    /// A field has a value the format does not allow (a wrong class id, a non-finite float, a link or index past its list, or bytes left over); `field` names it.
     #[error("guidance {field}: {why}")]
-    Invalid { field: &'static str, why: String },
+    Invalid {
+        /// The field that was refused.
+        field: &'static str,
+        /// What is wrong with it.
+        why: String,
+    },
 }
 
 fn invalid(field: &'static str, why: impl Into<String>) -> Error {
@@ -120,7 +137,9 @@ fn expect(c: &mut Cursor<'_>, field: &'static str, want: &[u8]) -> Result<(), Er
 /// One GuidanceObject: an edge between two points.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Edge {
+    /// The `Valid` byte, as stored.
     pub valid: u8,
+    /// The edge's `SubType` (u32), an index into [`SUB_TYPES`].
     pub sub_type: u32,
     /// Index0 and Index1: its start and end in [`GuidanceSystem::points`].
     pub points: [u32; 2],
@@ -146,6 +165,7 @@ pub enum Class {
 }
 
 impl Class {
+    /// The four classes, in declaration order.
     pub const ALL: [Class; 4] = [Class::Plain, Class::FreeForm, Class::Scale, Class::Morph];
 
     /// The game's class name.
@@ -170,6 +190,7 @@ impl Class {
         }
     }
 
+    /// The class with this class id, or `None` if it is none of the four.
     pub fn of(hash: u32) -> Option<Class> {
         Class::ALL.into_iter().find(|c| c.hash() == hash)
     }
@@ -179,7 +200,9 @@ impl Class {
 /// system's own, the shape at rest). Its points are as many as the system's, one per point of the system.
 #[derive(Clone, Debug, PartialEq)]
 pub struct State {
+    /// The state's object id.
     pub id: u32,
+    /// The state's edges; the same edges as the system's, their points as in `points`.
     pub edges: Vec<Edge>,
     /// Local frame, metres.
     pub points: Vec<[f32; 3]>,
@@ -199,10 +222,13 @@ pub enum Shaping {
 /// A guidance system as read (the module documentation).
 #[derive(Clone, Debug, PartialEq)]
 pub struct GuidanceSystem {
+    /// Which of the four guidance classes the component is.
     pub class: Class,
+    /// The edges, in stored order.
     pub edges: Vec<Edge>,
     /// Local frame, metres.
     pub points: Vec<[f32; 3]>,
+    /// What follows the partitioner: nothing, a free-form system's template, or a morph system's states.
     pub shaping: Shaping,
     /// Links the system's own edges hold that name nothing (`check_edges`), read as [`NO_LINK`].
     pub stale_links: usize,
@@ -213,8 +239,11 @@ pub struct GuidanceSystem {
 /// A run of linked edges: the points in order, the edges between them, and whether the last point joins the first.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Chain {
+    /// Indices into [`GuidanceSystem::points`], in the order the chain visits them.
     pub points: Vec<u32>,
+    /// Indices into [`GuidanceSystem::edges`] of the edges between consecutive points.
     pub edges: Vec<usize>,
+    /// Whether the last point joins the first.
     pub closed: bool,
 }
 
