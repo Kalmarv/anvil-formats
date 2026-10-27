@@ -30,8 +30,11 @@ use primase_foundations::bytes::{Field, FieldError, View};
 /// at bits 2 (4 r + c).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FloorBlock {
+    /// The block's low height word (u16).
     pub lo: u16,
+    /// The block's high height word (u16); at least `lo` in every block of Riders Republic's MAD_USNAT forge.
     pub hi: u16,
+    /// Sixteen 2-bit indices, one per cell: cell (r, c) at bits `2 * (4 * r + c)`; how an index and the two words give a height is not read.
     pub indices: u32,
 }
 
@@ -46,21 +49,32 @@ const TRAILER: usize = 51;
 /// Why a FloorHeightData body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is shorter than the 9-byte header plus the 51-byte trailer; the length found.
     #[error("FloorHeightData body: {0} bytes, fewer than its header and trailer")]
     Short(usize),
+    /// A header or trailer field is cut short.
     #[error("FloorHeightData {0}")]
     Read(#[from] FieldError),
+    /// A header or trailer word that must be fixed (the head `01 00 00 00`, byte 8, trailer words 0 and 24) has another value.
     #[error("FloorHeightData {what}: {found:#x}, not {read}")]
     Value {
+        /// Which word.
         what: &'static str,
+        /// The value found.
         found: u64,
+        /// The value the format fixes there.
         read: &'static str,
     },
+    /// The bytes between header and trailer are not 8 per 4x4-cell block of the `dx` x `dy` grid the trailer states (or `dx` or `dy` is not a multiple of 4).
     #[error("FloorHeightData: {have} bytes of blocks, not the {want} its {dx} x {dy} cells take")]
     Blocks {
+        /// The bytes found between header and trailer.
         have: usize,
+        /// The bytes the grid size needs (`usize::MAX` if the size is not a multiple of 4 or overflows).
         want: usize,
+        /// Cells along x, from the trailer.
         dx: u32,
+        /// Cells along y, from the trailer.
         dy: u32,
     },
 }
@@ -87,10 +101,12 @@ pub struct StoredFloorHeight {
     pub cell: f32,
     /// The blocks, row by row.
     pub blocks: Vec<FloorBlock>,
+    /// The 51 bytes after the blocks.
     pub trailer: Trailer,
 }
 
 impl StoredFloorHeight {
+    /// Reads a FloorHeightData body; refuses a body with a changed fixed word, a grid size that is not a multiple of 4, and a block run that is not exactly the grid's size.
     pub fn parse(body: &[u8]) -> Result<StoredFloorHeight, Error> {
         let data = body
             .len()

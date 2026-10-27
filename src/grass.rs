@@ -20,18 +20,27 @@ use primase_foundations::bytes::{Cursor, Field};
 /// enum, the imposter shader levels, and the 23 bytes after them that the class list doesn't name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GrassModelSettings {
+    /// `ZOffset` (f32), as stored.
     pub z_offset: f32,
+    /// `HeightScaleForOcclusion` (f32), as stored.
     pub height_scale_for_occlusion: f32,
+    /// `TerrainNormalFollowerRatio` (f32), as stored.
     pub terrain_normal_follower_ratio: f32,
+    /// `RootHeight` (f32), as stored.
     pub root_height: f32,
+    /// `Softness` (f32), as stored.
     pub softness: f32,
+    /// `NormalBendFactor` (f32), as stored.
     pub normal_bend_factor: f32,
+    /// `VisibleVirtualLODCount` (u8), as stored.
     pub visible_virtual_lod_count: u8,
+    /// `TextureAtlasElementCount` (u8), as stored.
     pub texture_atlas_element_count: u8,
     /// `RaycastTranslucency` (the enum `GrassModel::RaycastTranslucency`).
     pub raycast_translucency: u32,
     /// `ImposterStartShaderModelLodIndex` and the two after it: three bytes.
     pub imposter_shader_start_model_lod_index: [u8; 3],
+    /// `ImposterLookAtRatio` (f32), as stored.
     pub imposter_lookat_ratio: f32,
     /// The 23 bytes that follow, as stored: a LOD table of 5 bytes (`00 01 02 03 03`), four f32 and 2 bytes.
     pub unnamed: [u8; 23],
@@ -43,14 +52,18 @@ pub struct GrassModelSettings {
 /// A group: the rules that apply where a ground sample picks it (a GrassPattern).
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredGrassGroup {
+    /// The GrassPattern object's id.
     pub id: u64,
+    /// The group's rules, in stored order.
     pub rules: Vec<StoredGrassRule>,
 }
 
 /// A GrassPatternLibrary body as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredGrassLibrary {
+    /// The library's models, in stored order; a rule's [`StoredGrassRule::model`] indexes this list.
     pub models: Vec<StoredGrassModel>,
+    /// The groups (GrassPatterns), in stored order.
     pub groups: Vec<StoredGrassGroup>,
     /// The 256-byte table that follows the groups: the group of a material (`FF`: none; all but entry 255 on Riders
     /// Republic's, whose entry 255 is 184).
@@ -62,29 +75,43 @@ pub struct StoredGrassLibrary {
 /// One model of the library: its settings and its bounding volume.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredGrassModel {
+    /// The GrassModel object's id.
     pub id: u64,
+    /// The model's settings.
     pub settings: GrassModelSettings,
     /// The BoundingVolume object's id, its six f32 (min and max) and the 24 bytes after them as stored.
     pub bounds_id: u64,
+    /// The bounding volume's six f32: minimum then maximum.
     pub bounds: [f32; 6],
+    /// The 24 bytes after the bounds, as stored.
     pub bounds_rest: [u8; 24],
 }
 
 /// A rule: one model that may grow where its group is picked (a GrassPatternElement).
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredGrassRule {
+    /// The GrassPatternElement object's id.
     pub id: u64,
     /// `GrassModelIndex`: the position in the setup's ManagedEntities (and the library's models). 0 to 50 occur;
     /// 46 to 50 name no model.
     pub model: u16,
+    /// `TilingLogCount` (u8), as stored.
     pub tiling_log_count: u8,
+    /// `Density` (f32), as stored.
     pub density: f32,
+    /// `TiltFactor` (f32), as stored.
     pub tilt_factor: f32,
+    /// Whether scaling applies; stored as a byte, true when nonzero.
     pub scaling_enabled: bool,
+    /// The first scaling value (f32), as stored.
     pub scale_a: f32,
+    /// The second scaling value (f32), as stored.
     pub scale_b: f32,
+    /// Whether height scaling applies; stored as a byte, true when nonzero.
     pub height_scaling_enabled: bool,
+    /// The first height-scaling value (f32), as stored.
     pub height_scale_a: f32,
+    /// The second height-scaling value (f32), as stored.
     pub height_scale_b: f32,
     /// The field `63D19E01` (5.0 on 145 rules, 0.0 on 66, 2.5 on others): not named.
     pub unnamed_f32: f32,
@@ -114,6 +141,7 @@ const BOUNDING_VOLUME: u32 = 0x4AEC_3476;
 /// Why a library body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, malformed or has bytes left over; the inner error names the field and offset.
     #[error("grass library {0}")]
     Body(#[from] BodyError),
 }

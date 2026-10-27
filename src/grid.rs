@@ -44,6 +44,7 @@ const GRID_CELL: u32 = 0x3435_AD40;
 /// Why a grid body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, malformed or has bytes left over; the inner error names the field and offset.
     #[error("grid {0}")]
     Body(#[from] BodyError),
 }
@@ -52,18 +53,26 @@ body_error!(Error, Error::Body);
 /// A GridLayout as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GridLayout {
+    /// The run of u16 before the cell size, as stored; its length (5 in base forges' Worlds, 4 in their patches') is chosen by the caller of [`grid_descriptions`] and its meaning is not read.
     pub words: Vec<u16>,
+    /// The side of a level-0 cell (i32), in the layout's own coordinate unit.
     pub cell_size: i32,
+    /// The grid's bottom-left corner (three i32); the first two give the horizontal plane [`GridLayout::cell`] uses.
     pub bottom_left: [i32; 3],
+    /// The number of level-0 cells along one side (i32); each coarser level has half as many.
     pub dimension: i32,
+    /// The three bytes after the dimension, as stored; their meaning is not read.
     pub after: [u8; 3],
 }
 
 /// One of a World's GridDescriptions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GridDescription {
+    /// The GridDescription object's id.
     pub id: u64,
+    /// The description's GridLayout.
     pub layout: GridLayout,
+    /// The reference to the description's GridPartition, or `None` if stored as the empty form.
     pub partition: Option<Reference>,
 }
 
@@ -107,11 +116,14 @@ pub fn grid_descriptions(body: &[u8], words: usize) -> Result<Vec<GridDescriptio
 /// A GridPartition as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredGridPartition {
+    /// The number of levels (u32).
     pub levels: u32,
+    /// Each cell's GridCellDataBlock ClassID, in cell order; 0 for a cell with none.
     pub cells: Vec<u64>,
 }
 
 impl StoredGridPartition {
+    /// Reads a GridPartition body to its last byte; refuses a changed fixed word (first byte, a cell's id and type, the closing zero) and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredGridPartition, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "GridPartition first byte", 1, 1)?;
@@ -133,12 +145,16 @@ impl StoredGridPartition {
 /// A GridCellDataBlock as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredGridCellDataBlock {
+    /// The references to what the cell holds, in stored order; each must be present.
     pub objects: Vec<Reference>,
+    /// The u32 after the list, as stored; its meaning is not read.
     pub word: u32,
+    /// The u64 ending the body: the cell's number, or a DataLayer's ClassID.
     pub key: u64,
 }
 
 impl StoredGridCellDataBlock {
+    /// Reads a GridCellDataBlock body to its last byte; refuses an empty reference in the list and trailing bytes.
     pub fn parse(body: &[u8]) -> Result<StoredGridCellDataBlock, Error> {
         let mut c = Cursor::new(body);
         expect(&mut c, "GridCellDataBlock first byte", 1, 1)?;
@@ -163,8 +179,11 @@ impl StoredGridCellDataBlock {
 /// A grid cell's place: its level (0 the finest), column and row, and its square in the grid's horizontal plane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
+    /// The cell's level; 0 is the finest.
     pub level: u32,
+    /// The cell's column at its level, counted along x from the bottom-left corner.
     pub column: i64,
+    /// The cell's row at its level, counted along y from the bottom-left corner.
     pub row: i64,
     /// The corner with the least coordinates (the plane of the GridLayout's first two corner coordinates).
     pub min: [i64; 2],

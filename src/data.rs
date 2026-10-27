@@ -43,49 +43,91 @@ pub const CHECKSUM_INIT: u32 = 0;
 /// Why a payload can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The block does not start with the 8-byte block magic; `found` is the value read at `at`.
     #[error("block at {at}: no block magic (found {found:016x}): not a data block")]
-    Magic { at: usize, found: u64 },
+    Magic {
+        /// The offset of the block in the entry.
+        at: usize,
+        /// The eight bytes read there, as a little-endian u64.
+        found: u64,
+    },
+    /// The compression version at offset 8 of the block is neither 1 nor 2.
     #[error("block at {at}: compression version {version}: only versions 1 and 2 are read")]
-    Version { at: usize, version: u16 },
+    Version {
+        /// The offset of the block in the entry.
+        at: usize,
+        /// The compression version found.
+        version: u16,
+    },
+    /// The version and algorithm byte (offset 10) are not a pair read: version 2 with 5 (zstd) or version 1 with 2 (LZO2A).
     #[error(
         "block at {at}: compression version {version}, algorithm {algorithm}: only 2 with 5 (zstd) and 1 with 2 (LZO2A) are read"
     )]
-    Algorithm { at: usize, version: u16, algorithm: u8 },
+    Algorithm {
+        /// The offset of the block in the entry.
+        at: usize,
+        /// The compression version found.
+        version: u16,
+        /// The algorithm byte found.
+        algorithm: u8,
+    },
+    /// The block's chunk count is zero, past this machine's address space, or more than the bytes can hold; `why` says which.
     #[error("block at {at}: {count} chunks: {why}")]
     Chunks {
+        /// The offset of the block in the entry.
         at: usize,
+        /// The chunk count stored in the block.
         count: u32,
+        /// What is wrong with the count.
         why: &'static str,
     },
+    /// A chunk's sizes are unusable: past this machine's address space, over the bound given to [`read_block`], or a chunk running past the entry.
     #[error("block at {at}, chunk {chunk}: stored size {stored}, decoded size {decoded}: {why}")]
     Size {
+        /// The offset of the block in the entry.
         at: usize,
+        /// The chunk's position in the block.
         chunk: usize,
+        /// The chunk's stored size in bytes.
         stored: u32,
+        /// The chunk's decoded size in bytes.
         decoded: u32,
+        /// What is wrong with the sizes.
         why: &'static str,
     },
+    /// A chunk's stored checksum is not the Adler-32 (starting from 0) of its stored bytes.
     #[error(
         "block at {at}, chunk {chunk}: checksum {stored:08x}, computed {computed:08x} (Adler-32 from 0 over the stored bytes)"
     )]
     Checksum {
+        /// The offset of the block in the entry.
         at: usize,
+        /// The chunk's position in the block.
         chunk: usize,
+        /// The checksum stored in the block.
         stored: u32,
+        /// The checksum computed over the chunk's stored bytes.
         computed: u32,
     },
+    /// A chunk failed to decompress.
     #[error("block at {at}: {source}")]
     Decode {
+        /// The offset of the block in the entry.
         at: usize,
+        /// The decompressor's error.
         #[source]
         source: primase_foundations::compress::Error,
     },
+    /// The entry ends before a field is complete.
     #[error("{0}")]
     Short(#[from] FieldError),
+    /// Chunk table or decoded sizes that do not fit this machine's address space; the string names which.
     #[error("{0}: sizes past the address space")]
     Overflow(&'static str),
+    /// The two blocks end before the entry does; the count is how many bytes follow.
     #[error("the entry has {0} bytes after its two blocks")]
     Trailing(usize),
+    /// The resource block's header is malformed or its lengths disagree with the block's size; the string says what.
     #[error("resource: {0}")]
     Resource(String),
 }
@@ -93,18 +135,24 @@ pub enum Error {
 /// One chunk of a block as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Chunk {
+    /// The size in bytes the chunk decodes to.
     pub decoded_size: u32,
+    /// The size in bytes the chunk occupies in the block; a chunk with `stored_size == decoded_size` is stored raw.
     pub stored_size: u32,
+    /// The Adler-32 checksum (starting value 0) of the stored bytes, as stored and verified.
     pub checksum: u32,
 }
 
 /// One data block as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
+    /// The compression version (u16 at offset 8): 2 for zstd, 1 for LZO2A.
     pub version: u16,
+    /// The compression algorithm byte (offset 10): 5 for zstd, 2 for LZO2A.
     pub algorithm: u8,
     /// The two u16 after the algorithm (observed 0 and 32772).
     pub unknown: [u16; 2],
+    /// The block's chunk table, in stored order.
     pub chunks: Vec<Chunk>,
     /// The chunks' decoded bytes in order (the stored bytes where a chunk is stored raw).
     pub data: Vec<u8>,
@@ -120,7 +168,9 @@ impl Block {
 /// An entry's two blocks: the metadata (16 bytes, as stored) and the resource.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
+    /// The first block: the entry's 16-byte metadata, as stored.
     pub metadata: Block,
+    /// The second block: the resource.
     pub resource: Block,
 }
 
@@ -129,6 +179,7 @@ pub struct Entry {
 pub struct Resource {
     /// CRC-32 of the type's name.
     pub type_id: u32,
+    /// The resource's name, read as UTF-8 from the length-prefixed field after the type id and lengths.
     pub name: String,
     /// The byte after the name: 0 (1,292,246 resources of the six forges' census) or 1 (9,091: every Animation, the
     /// one AnimTrackBuiltinTracksTable and three of 0x8DEEB8AD), which a table follows ([`Resource::header_rows`]).
@@ -137,6 +188,7 @@ pub struct Resource {
     /// and that many rows of 12 bytes. Their meaning isn't read (on an Animation: pairs of a hash and a count, the
     /// registry's object-type hashes among them). Empty with file header 0.
     pub header_rows: Vec<[u8; 12]>,
+    /// The u64 that starts the payload: the resource's ClassID, which equals its entry's index id.
     pub class_id: u64,
     /// Observed equal to the type id.
     pub extension: u32,

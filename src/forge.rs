@@ -76,9 +76,15 @@ pub enum Error {
     /// The version field at offset 9 is neither 26 nor 27; the value found.
     #[error("forge version {0}: only versions 26 and 27 are read")]
     Version(i32),
-    /// A version-26 entry's `FILEDATA` header is wrong (bad magic, a name other than the name record's, or ids and size that differ from its index and name records); `index` is the entry, `why` says what differs.
+    /// A version-26 entry's `FILEDATA` header is wrong: bad magic, a name other than the name record's, or ids and size
+    /// that differ from its index and name records.
     #[error("entry {index}: its FILEDATA header {why}")]
-    FileData { index: usize, why: String },
+    FileData {
+        /// The entry's position in the tables.
+        index: usize,
+        /// What differs, in words.
+        why: String,
+    },
     /// A header or table lies outside the file.
     #[error("{what} at {offset}, {length} bytes: outside the file's {file} bytes")]
     OutOfFile {

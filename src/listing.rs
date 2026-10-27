@@ -25,35 +25,65 @@ use crate::tnl::TERRAIN_NODE_LAYER;
 /// A kind of entry some reader of this crate reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
+    /// A `Mesh`: vertex and index data, ranges and bone list; read by [`crate::mesh`].
     Mesh,
+    /// A `Material`: the references and properties a mesh range is drawn with; read by [`crate::material`].
     Material,
+    /// A `MaterialTemplate`: the shader permutations a Material selects from; read by [`crate::template`].
     MaterialTemplate,
+    /// A `TextureMap`: one texture; read by [`crate::texture`].
     TextureMap,
+    /// A `TextureSet`: the TextureMaps a Material uses; read by [`crate::material`].
     TextureSet,
+    /// A `CompiledMip`: one mip level of a TextureMap; read by [`crate::mip`].
     CompiledMip,
+    /// An `Entity`: a named object with components; read by [`crate::entity`].
     Entity,
+    /// An `EntityGroup`: Entities stored together; read by [`crate::entity`].
     EntityGroup,
+    /// A `LODSelector`: the level-of-detail list of a mesh; read by [`crate::lod`].
     LodSelector,
+    /// A `MeshShape`: a triangle-mesh collision shape; read by [`crate::mesh_shape`].
     MeshShape,
+    /// A `SphereShape`: a sphere collision shape; read by [`crate::shape`].
     SphereShape,
+    /// A `CapsuleShape`: a capsule collision shape; read by [`crate::shape`].
     CapsuleShape,
+    /// A `BoxShape`: a box collision shape; read by [`crate::shape`].
     BoxShape,
+    /// A `ReferenceListShape`: a collision shape made of other shapes; read by [`crate::shape`].
     ReferenceListShape,
+    /// A `World`: its grid descriptions; read by [`crate::grid`].
     World,
+    /// A `GridPartition`: a grid's cells; read by [`crate::grid`].
     GridPartition,
+    /// A `GridCellDataBlock`: the list of what one grid cell holds; read by [`crate::grid`].
     GridCellDataBlock,
+    /// A `TerrainNodeLayer`: the quadtree of terrain nodes; read by [`crate::tnl`].
     TerrainNodeLayer,
+    /// A `TerrainMaterialBank`: the list a terrain material raster indexes; read by [`crate::terrain_material`].
     TerrainMaterialBank,
+    /// A `TerrainMaterial`: one terrain detail material; read by [`crate::terrain_material`].
     TerrainMaterial,
+    /// A `CollisionMaterial`: a physical surface type; named by a TerrainMaterial ([`crate::terrain_material`]).
     CollisionMaterial,
+    /// A `FloorHeightData`: a terrain height grid; read by [`crate::floor`].
     FloorHeightData,
+    /// A `DDecalModel`: the textures and opacity a deferred decal draws with; read by [`crate::ddecal`].
     DecalModel,
+    /// A `Skeleton`: bones and poses; read by [`crate::skeleton`].
     Skeleton,
+    /// An `Impostor`: billboard cards standing in for a distant mesh; read by [`crate::impostor`].
     Impostor,
+    /// A `LayeredSky`: sun settings and scattering keyframes; read by [`crate::sky`].
     LayeredSky,
+    /// A `WorldAmbiance`; read by [`crate::sky`].
     WorldAmbiance,
+    /// A `GIDynResource`: a dynamic global-illumination probe volume; read by [`crate::gidyn`].
     GiDynResource,
+    /// An `AmbianceAndTimeOfDayPreset`; read by [`crate::look`].
     AmbiancePreset,
+    /// A `ForecastPreset`; read by [`crate::look`].
     ForecastPreset,
 }
 
