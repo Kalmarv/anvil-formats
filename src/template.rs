@@ -59,7 +59,9 @@ pub struct Binding {
     pub at: usize,
     /// Its property's key.
     pub key: u32,
+    /// The four u32 after the key, f1 to f4, as stored; [`Binding::kind`] reads (f3, f4) as what the record binds.
     pub f: [u32; 4],
+    /// The 10 bytes after the four words: a reference, or the tag-0 form kept as stored.
     pub target: Target,
     /// The 8 bytes after the reference, as stored (fewer where the body ends first).
     pub after: Vec<u8>,
@@ -78,18 +80,31 @@ pub enum Target {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BindingKind {
     /// (0, 3): a texture, at shader slot t(75 + f1).
-    Texture { slot: u32 },
+    Texture {
+        /// The shader slot offset f1: the texture is at t(75 + f1).
+        slot: u32,
+    },
     /// (1, 0): a scalar, the x of the constant buffer's vec4 f2.
-    Scalar { vec4: u32 },
+    Scalar {
+        /// f2, the index of the constant buffer's vec4.
+        vec4: u32,
+    },
     /// (1, 2): a vec4, the constant buffer's vec4 f2.
-    Vector { vec4: u32 },
+    Vector {
+        /// f2, the index of the constant buffer's vec4.
+        vec4: u32,
+    },
     /// (3, 6): a UV transform, its two rows the constant buffer's vec4s f2 and f2 + 1.
-    UvTransform { vec4: u32 },
+    UvTransform {
+        /// f2, the index of the transform's first row; the second row is the next vec4.
+        vec4: u32,
+    },
     /// Another (f3, f4).
     Other,
 }
 
 impl Binding {
+    /// What the record binds, from (f3, f4); [`BindingKind::Other`] for any pair not listed there.
     pub fn kind(&self) -> BindingKind {
         let [f1, f2, f3, f4] = self.f;
         match (f3, f4) {
@@ -148,10 +163,13 @@ pub const TEXTURE_PARAMETER: u32 = 0x7D08_460D;
 pub struct TextureParameter {
     /// Where its marker starts in the body.
     pub at: usize,
+    /// The `TextureSpecificationMethod` (u32), the channel.
     pub channel: u32,
+    /// The `MapType` (u32): the TextureSet slot the texture is taken from.
     pub slot: u32,
     /// The default set and texture the template names (none: null).
     pub set: Option<crate::reference::Reference>,
+    /// The default texture the template names, or `None` if null.
     pub texture: Option<crate::reference::Reference>,
 }
 
@@ -205,12 +223,17 @@ impl Binding {
 
 /// The class of each Operator a ShaderParameter links.
 pub const CONSTANT_FLOAT: u32 = 0xA475_5364;
+/// The class of a ConstantVectorValue operator.
 pub const CONSTANT_VECTOR: u32 = 0x6497_30E3;
+/// The class of a ConstantIntegerValue operator.
 pub const CONSTANT_INTEGER: u32 = 0xA026_AFF2;
+/// The class of a UVTransformOperator.
 pub const UV_TRANSFORM_OPERATOR: u32 = 0xEADF_9820;
 /// The UVTransformOperator's owned parameters.
 pub const UV_TRANSFORM: u32 = 0xC52E_2125;
+/// The class of a TextureObject operator.
 pub const TEXTURE_OBJECT: u32 = 0x5EF9_EA65;
+/// The class of a TextureArray operator, read like a TextureObject.
 pub const TEXTURE_ARRAY: u32 = 0x4C6B_3C62;
 /// A texture binding's custom operator (see [`custom_texture`]).
 pub const SHADER_CUSTOM_TEXTURE_OPERATOR: u32 = 0x1181_BD58;
@@ -233,16 +256,25 @@ pub enum OperatorDefault {
     /// A UVTransformOperator's UVTransform: `ScaleU`, `ScaleV`, `TranslationU`, `TranslationV`, their speeds,
     /// `Rotation`, `RotationSpeed` (a Material's UV-transform property's order), then `ForceDynamic`,
     /// `AnimateTranslation` and `AnimateRotation`.
-    Uv { floats: [f32; 8], flags: [u8; 3] },
+    Uv {
+        /// The eight floats of the UVTransform, in the order of its stored fields.
+        floats: [f32; 8],
+        /// The three bytes after the floats, as stored.
+        flags: [u8; 3],
+    },
     /// A TextureObject's (or TextureArray's) TextureSelector and `SamplerMode`.
     Texture {
+        /// The TextureSelector's TextureParameter record.
         selector: TextureParameter,
+        /// The `SamplerMode` (u32) as stored.
         sampler_mode: u32,
     },
     /// A ShaderCustomTextureOperator's own TextureSelector and `SamplerMode`: it selects a texture as a TextureObject's
     /// selector does ([`custom_texture`]).
     CustomTexture {
+        /// The ShaderCustomTextureOperator's TextureSelector record.
         selector: TextureParameter,
+        /// The `SamplerMode` (u32) as stored.
         sampler_mode: u32,
     },
     /// Another Operator, its class: no default read.
@@ -431,13 +463,18 @@ pub fn texture_parameter(body: &[u8], b: &Binding) -> Result<Option<TextureParam
 /// Why a binding record can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum BindingError {
+    /// The body ends inside a record; the offset is where the record starts.
     #[error("MaterialTemplate binding at {0}: the body ends inside it")]
     Short(usize),
+    /// A TextureParameter or pin does not have the fixed bytes the format gives it; the offset is where it starts.
     #[error("MaterialTemplate TextureParameter at {0}: its byte or third word isn't 0")]
     Parameter(usize),
+    /// A 10-byte reference in the record is malformed.
     #[error("MaterialTemplate binding at {at}: {source}")]
     Reference {
+        /// The record's offset in the body.
         at: usize,
+        /// Why the reference was refused.
         #[source]
         source: crate::reference::Error,
     },
@@ -473,8 +510,10 @@ impl Descriptor {
 /// Why a template's descriptors can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// No run of descriptors reads whole in the body.
     #[error("MaterialTemplate: no descriptor run reads whole")]
     None,
+    /// More than one run of descriptors reads whole: the count of runs, and the offset of each run's first descriptor.
     #[error(
         "MaterialTemplate: {0} descriptor runs read whole, at {1:?}: which is the template's isn't established"
     )]
@@ -621,13 +660,16 @@ pub const SHADER_PERMUTATION: u32 = 0x9467_F2BB;
 /// One stage of a shader program.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Stage {
+    /// The vertex stage.
     Vertex,
+    /// The pixel stage.
     Pixel,
 }
 
 /// One of a template's shader permutations: the key the engine looks it up by, and its program.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Permutation<'b> {
+    /// The stage of the program, read from its DXBC container.
     pub stage: Stage,
     /// The engine's ShaderKey (bits 22 to 29 its pass).
     pub key: u32,
@@ -635,33 +677,49 @@ pub struct Permutation<'b> {
     pub code_hash: u32,
     /// The program's offset in the body and its DXBC container.
     pub at: usize,
+    /// The program's DXBC container, borrowed from the body.
     pub container: &'b [u8],
 }
 
 /// Why a template's permutations can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum PermutationError {
+    /// A ShaderPermutation record has a fixed field with another value (for example a parameter count other than 0).
     #[error("ShaderPermutation at {at}: {what} {found:#x}, not {read}")]
     Value {
+        /// The field refused.
         what: &'static str,
+        /// The record's offset in the body.
         at: usize,
+        /// The value found.
         found: u64,
+        /// The value read there, in words.
         read: &'static str,
     },
+    /// The permutation's UCodeHash names no container or more than one.
     #[error(
         "ShaderPermutation at {at} (key {key:#010x}): its UCodeHash {code_hash:#010x} names {programs} programs"
     )]
     Program {
+        /// The record's offset in the body.
         at: usize,
+        /// The permutation's ShaderKey.
         key: u32,
+        /// The UCodeHash.
         code_hash: u32,
+        /// How many containers carry that hash.
         programs: usize,
     },
+    /// The permutation's program has no usable stage (its chunks do not parse, it has no program chunk, or it is of another stage).
     #[error("ShaderPermutation at {at} (key {key:#010x}): its program at {program_at} can't be read: {why}")]
     Unread {
+        /// The record's offset in the body.
         at: usize,
+        /// The permutation's ShaderKey.
         key: u32,
+        /// The container's offset in the body.
         program_at: usize,
+        /// Why the program was refused.
         why: String,
     },
 }
@@ -758,8 +816,10 @@ pub const COMPILED_MATERIAL_TEMPLATE: u32 = 0x3B9B_7477;
 /// Why a template's shader-state node can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum FeatureError {
+    /// The body holds this number of shader-state nodes instead of one.
     #[error("{0} shader-state nodes (class 0xB4FD3A4C), not one")]
     Nodes(usize),
+    /// The shader-state node at this offset has no CompiledMaterialTemplate record after it.
     #[error("the shader-state node at {0} is not followed by a CompiledMaterialTemplate record")]
     Unterminated(usize),
 }
@@ -815,13 +875,24 @@ pub struct ShaderTables {
 pub enum TablesError {
     /// A stage's keys are not strictly ascending, so a lookup could miss a key it holds or find two programs.
     #[error("{stage:?} keys not strictly ascending: {first:#x} then {second:#x}")]
-    Unordered { stage: Stage, first: u32, second: u32 },
+    Unordered {
+        /// The stage whose keys are out of order.
+        stage: Stage,
+        /// The earlier key of the pair.
+        first: u32,
+        /// The key after it, which is not above `first`.
+        second: u32,
+    },
     /// A key names a program the tables don't hold.
     #[error("{stage:?} key {key:#x} names program {index} of {programs}")]
     NoProgram {
+        /// The stage whose table holds the key.
         stage: Stage,
+        /// The key.
         key: u32,
+        /// The program index the key names.
         index: usize,
+        /// How many programs the tables hold.
         programs: usize,
     },
 }

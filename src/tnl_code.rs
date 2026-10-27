@@ -185,7 +185,12 @@ pub enum Error {
     Short(usize),
     /// The block's first u32 `n` (where A ends and B begins) is under 4 or past the block's `len`.
     #[error("coded block: A ends at {n}, outside the block of {len} bytes")]
-    Split { n: usize, len: usize },
+    Split {
+        /// The split offset stored in the block's first u32.
+        n: usize,
+        /// The block's length in bytes.
+        len: usize,
+    },
     /// The arithmetic decoder read past the end of the block.
     #[error("coded block: the decoder reads past the block's end")]
     PastBlock,
