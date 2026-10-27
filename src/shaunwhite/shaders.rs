@@ -104,6 +104,7 @@ pub struct Effect {
     pub variables: Vec<String>,
 }
 
+/// What a record holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Payload {
     /// A retained key with no compiled data. This is not a zero-byte shader.
