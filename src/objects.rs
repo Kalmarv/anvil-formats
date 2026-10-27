@@ -27,23 +27,39 @@ use crate::fields::LE;
 /// Why an entry's objects can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The metadata block is too short for the object count or for a directory row.
     #[error("{0}")]
     Short(#[from] FieldError),
+    /// The metadata block's length is not 2 bytes plus 8 per object.
     #[error("the directory of {count} objects takes {expected} bytes; its block holds {actual}")]
     Directory {
+        /// The object count stored in the first two bytes of the metadata block.
         count: usize,
+        /// The metadata length the count implies: 2 plus 8 per object.
         expected: usize,
+        /// The metadata block's actual length.
         actual: usize,
     },
+    /// An object's size, name or body does not fit in the resource block; `why` says which.
     #[error("object {index} (id {id:#x}) at {at}: {why}")]
     Object {
+        /// The object's position in the directory.
         index: usize,
+        /// The object's id from the directory.
         id: u32,
+        /// The byte offset in the resource block where the object starts.
         at: usize,
+        /// What is wrong with it.
         why: String,
     },
+    /// The directory's object sizes do not add up to the resource block's length.
     #[error("the objects end at {end}; the resource block holds {actual} bytes")]
-    Trailing { end: usize, actual: usize },
+    Trailing {
+        /// The offset where the last object ends.
+        end: usize,
+        /// The resource block's length in bytes.
+        actual: usize,
+    },
 }
 
 /// One object of an entry, as stored: where its parts lie in the resource block.
@@ -53,6 +69,7 @@ pub struct StoredObject {
     pub id: u32,
     /// CRC-32 of its class's name.
     pub class: u32,
+    /// The object's name, read as UTF-8 from the length-prefixed field after its class and body size.
     pub name: String,
     /// The byte after the name (0, or 1 on Animation objects).
     pub header: u8,

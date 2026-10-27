@@ -67,48 +67,81 @@ fn sizes(version: i32) -> (u64, u64, u64) {
 /// Why a forge can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Reading or seeking in the file failed, or it ended early.
     #[error("reading the forge: {0}")]
     Io(#[from] std::io::Error),
+    /// The file does not start with `scimitar\0`; the nine bytes found are given.
     #[error("not a forge: magic {0:02x?}, not \"scimitar\\0\"")]
     Magic([u8; 9]),
+    /// The version field at offset 9 is neither 26 nor 27; the value found.
     #[error("forge version {0}: only versions 26 and 27 are read")]
     Version(i32),
+    /// A version-26 entry's `FILEDATA` header is wrong (bad magic, a name other than the name record's, or ids and size that differ from its index and name records); `index` is the entry, `why` says what differs.
     #[error("entry {index}: its FILEDATA header {why}")]
     FileData { index: usize, why: String },
+    /// A header or table lies outside the file.
     #[error("{what} at {offset}, {length} bytes: outside the file's {file} bytes")]
     OutOfFile {
+        /// Which header, table or payload.
         what: &'static str,
+        /// Where it was said to start, in bytes from the start of the file.
         offset: i64,
+        /// How many bytes it needs.
         length: u64,
+        /// The file's size in bytes.
         file: u64,
     },
+    /// A count or range in the headers is negative or disagrees with another: the entry count against the index count and `MaxFilesForThisIndex`, or the index range.
     #[error("{what} {value}: {why}")]
     Count {
+        /// Which count.
         what: &'static str,
+        /// The value found.
         value: i64,
+        /// What is wrong with it.
         why: String,
     },
+    /// `DataHeader2` points to a second FileSet at this offset (it should hold -1); only a forge with one FileSet is read.
     #[error("a second FileSet at {0}: only a forge with one is read")]
     FileSets(i64),
+    /// An entry's payload offset or size is negative, or its payload (with the version-26 `FILEDATA` header) ends past the end of the file.
     #[error("entry {index}: payload offset {offset}, size {size}: {why}")]
     Entry {
+        /// The entry's position in the tables.
         index: usize,
+        /// The payload offset in the index record.
         offset: i64,
+        /// The payload size in the index record.
         size: i32,
+        /// Which of the two checks failed.
         why: &'static str,
     },
+    /// An entry's index record and name record state different sizes.
     #[error(
         "entry {index}: index size {index_size}, name record size {name_size}: the tables do not correspond"
     )]
     Sizes {
+        /// The entry's position in the tables.
         index: usize,
+        /// The size in the index record.
         index_size: i32,
+        /// The size in the name record.
         name_size: i32,
     },
+    /// The entry's name field is not UTF-8; the value is the entry's position.
     #[error("entry {0}: its name is not UTF-8")]
     Name(usize),
+    /// Two entries have the same index id.
     #[error("entries {first} and {second} share the index id {id:#x}")]
-    DuplicateId { id: u64, first: usize, second: usize },
+    DuplicateId {
+        /// The repeated index id.
+        id: u64,
+        /// The earlier entry.
+        first: usize,
+        /// The later entry.
+        second: usize,
+    },
+    /// A header or record is shorter than its fields.
     #[error("{0}")]
     Short(#[from] FieldError),
 }
@@ -116,21 +149,26 @@ pub enum Error {
 /// The file header, before DataHeader1.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileHeader {
+    /// The file's version (i32 at offset 9): 26 or 27.
     pub version: i32,
     /// Where DataHeader1 starts.
     pub header_size: u64,
     /// The i64 and i32 after the header size (observed 16 and 1).
     pub unknown_15: i64,
+    /// The i32 at offset 0x1d, kept as stored (observed 1).
     pub unknown_1d: i32,
 }
 
 /// DataHeader1, at the header size.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataHeader1 {
+    /// The entry count (i32 at offset 0 of `DataHeader1`).
     pub entries: i32,
     /// Four i32 (three in version 26).
     pub unknown_04: Vec<i32>,
+    /// The i64 after the four i32 (offset 0x14 in version 27, 0x10 in version 26), kept as stored.
     pub unknown_14: i64,
+    /// The capacity of the index and name tables in records; the entry count may not exceed it.
     pub max_files_for_this_index: i32,
     /// Observed 1 (one FileSet).
     pub unknown_20: i32,
@@ -141,14 +179,19 @@ pub struct DataHeader1 {
 /// DataHeader2: where the FileSet's tables are.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataHeader2 {
+    /// The number of index records (i32 at offset 0 of `DataHeader2`); equals the entry count.
     pub index_count: i32,
     /// Observed 2.
     pub unknown_04: i32,
+    /// Where the index table starts, in bytes from the start of the file (i64 at offset 8).
     pub offset_to_index_table: i64,
     /// -1: no other FileSet.
     pub offset_to_next_data_section: i64,
+    /// The first index in the index range (i32 at offset 0x18); not negative.
     pub index_start: i32,
+    /// The end of the index range (i32 at offset 0x1c): the index count in version 27, the last of `MaxFilesForThisIndex` records in version 26.
     pub index_end: i32,
+    /// Where the name table starts, in bytes from the start of the file (i64 at offset 0x20).
     pub offset_to_name_table: i64,
     /// Observed: the name table's offset plus `MaxFilesForThisIndex` name records.
     pub unknown_28: i64,
@@ -157,32 +200,43 @@ pub struct DataHeader2 {
 /// An index record: where an entry's payload is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IndexRecord {
+    /// Where the entry's payload starts, in bytes from the start of the file (i64); in version 26 the payload follows a 440-byte `FILEDATA` header at this offset.
     pub offset: i64,
     /// The index table's id (not the name record's); 32 bits in version 26.
     pub id: u64,
+    /// The payload's size in bytes (i32), not counting a version-26 `FILEDATA` header; equals the name record's size.
     pub size: i32,
 }
 
 /// A name record: an entry's name and type, every field as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NameRecord {
+    /// The payload's size in bytes (i32 at offset 0); equals the index record's size.
     pub size: i32,
     /// The name table's id (not the index record's).
     pub id: u64,
+    /// The i32 at offset 0x0c, kept as stored.
     pub unknown_0c: i32,
     /// The entry's type id as the name table holds it (on every type read here it equals the record's own type id,
     /// itself equal to the CRC-32 of a type name: `Mesh`, `TextureMap`, ...; the names are labels).
     pub type_id: u32,
+    /// Two i32 at offset 0x14, kept as stored.
     pub unknown_14: [i32; 2],
+    /// The i32 at offset 0x1c, kept as stored.
     pub unknown_1c: i32,
+    /// The i32 at offset 0x20, kept as stored.
     pub unknown_20: i32,
+    /// The i32 at offset 0x24, kept as stored.
     pub unknown_24: i32,
+    /// The i32 at offset 0x28, a timestamp as stored; its epoch is not established.
     pub timestamp: i32,
     /// The name, up to its first NUL.
     pub name: String,
+    /// The i32 at offset 0xac, kept as stored.
     pub unknown_ac: i32,
     /// The meta-file key (AnvilToolkit's name for it; 32 bits in version 26).
     pub meta_file_key: u64,
+    /// Two i32 at offset 0xb8 (0xb4 in version 26), kept as stored.
     pub unknown_b8: [i32; 2],
 }
 
@@ -191,10 +245,15 @@ pub struct NameRecord {
 pub struct Forge {
     /// The file's size in bytes.
     pub file_size: u64,
+    /// The file header.
     pub header: FileHeader,
+    /// `DataHeader1`.
     pub data_header_1: DataHeader1,
+    /// `DataHeader2`.
     pub data_header_2: DataHeader2,
+    /// The index records, one per entry in table order.
     pub index: Vec<IndexRecord>,
+    /// The name records, in the same order: `names[k]` belongs to `index[k]`.
     pub names: Vec<NameRecord>,
     /// Each index id's entry (index ids are unique within a forge; a repeated one is refused).
     by_id: BTreeMap<u64, usize>,

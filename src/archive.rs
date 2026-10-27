@@ -22,16 +22,23 @@ pub const MAX_RECORD: usize = 64 << 20;
 /// Why an archive can't be opened or an entry read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Opening or reading a forge file failed at the operating-system level.
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// A forge's header, index or name tables are malformed or its payload could not be read; see [`crate::forge::Error`].
     #[error(transparent)]
     Forge(#[from] crate::forge::Error),
+    /// [`At::forge`] (or a forge position passed in) is not a position in the order given to [`Archive::open`].
     #[error("no forge {0} in the archive")]
     NoForge(usize),
+    /// An entry's data blocks failed to decode or its resource header failed to parse; `forge` and `entry` say which entry.
     #[error("forge {forge}, entry {entry}: {source}")]
     Data {
+        /// The forge's position in the order given to [`Archive::open`].
         forge: usize,
+        /// The entry's index in that forge's listing.
         entry: usize,
+        /// Why the entry did not decode.
         #[source]
         source: crate::data::Error,
     },
@@ -47,7 +54,9 @@ pub struct Archive {
 /// An entry of one of an archive's forges: the forge's position in the order given, and the entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct At {
+    /// The forge's position in the order given to [`Archive::open`].
     pub forge: usize,
+    /// The entry's index in that forge's listing.
     pub entry: usize,
 }
 
