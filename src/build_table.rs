@@ -44,12 +44,15 @@ use primase_foundations::bytes::{Field, View};
 /// A BuildTable's column (`BuildColumn`): what a row's property of this column sets.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BuildColumn {
+    /// The BuildColumn object's id.
     pub id: u64,
     /// The `ApplyPassBitField`'s object id and its byte.
     pub apply_id: u64,
+    /// The byte of the `ApplyPassBitField`, as stored.
     pub apply_bits: u8,
     /// The `PropertyPath`'s nodes and its two bytes (`DA663376` and `WholeArray`).
     pub path: Vec<PathNode>,
+    /// The two bytes after the path's nodes, as stored.
     pub path_bytes: [u8; 2],
     /// The three u32 fields after the path (`2AC53EC4`, `40B8B662`, `A51AC878`): the first is the column's number,
     /// 1 to the column count, that rows' properties name.
@@ -65,34 +68,44 @@ pub struct BuildColumn {
 /// A link as a BuildTable stores one: a tag byte (0 or 1) and the u64 ClassID it names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BuildLink {
+    /// The pointer's tag byte, as stored.
     pub tag: u8,
+    /// The ClassID the pointer names (u64).
     pub id: u64,
 }
 
 /// A BuildTable's property of one row: the column's number and the value.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BuildProperty {
+    /// The column number the property sets (u32); it is the column's `fields[0]`, counted from 1.
     pub column: u32,
+    /// The property's value.
     pub value: BuildValue,
 }
 
 /// A `DynamicResources` object: the resources a row's properties name, as links.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BuildResources {
+    /// The `DynamicResources` object's id.
     pub id: u64,
+    /// The links it lists, in stored order.
     pub links: Vec<BuildLink>,
 }
 
 /// A BuildTable's row (`BuildRow`): kept as stored, weight and condition included; nothing here picks a row.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BuildRow {
+    /// The BuildRow object's id.
     pub id: u64,
+    /// The row's pointer to a BuildTable.
     pub table: BuildLink,
+    /// The row's weight (f32), as stored; nothing here interprets it.
     pub weight: f32,
     /// The `BuildTag`'s hash (the gender conditions 0x0B27268E and 0xE2B60126 on the rider tables).
     pub condition: u32,
     /// The `BuildTags`' object id.
     pub tags_id: u64,
+    /// The row's properties, in stored order.
     pub properties: Vec<BuildProperty>,
 }
 
@@ -104,15 +117,18 @@ pub struct BuildValue {
     pub class: u32,
     /// The u16 before the kind and the u16 after it, as stored.
     pub before: u16,
+    /// The u16 after the kind, as stored.
     pub after: u16,
     /// The registry's field kind, flags included (`0x1C` a reference, `0x12` a link, `0x02000014` a pointer).
     pub kind: u32,
+    /// The bytes of the kind `kind & 0x3F`, as stored.
     pub value: Vec<u8>,
 }
 
 /// One node of a column's `PropertyPath`: its 41 bytes of fields as stored and the solver it points to.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PathNode {
+    /// The node's 41 bytes of fields, as stored.
     pub fields: Vec<u8>,
     /// The solver object: its class and its body as stored (none where the pointer is null).
     pub solver: Option<(u32, Vec<u8>)>,
@@ -122,10 +138,13 @@ pub struct PathNode {
 /// calls it a Selector; the meaning of a row's properties is its claim.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredBuildTable {
+    /// The columns, in stored order.
     pub columns: Vec<BuildColumn>,
+    /// The rows, in stored order.
     pub rows: Vec<BuildRow>,
     /// The four bytes between the rows and the resources, as stored.
     pub flags: [u8; 4],
+    /// The `DynamicResources` objects, in stored order.
     pub resources: Vec<BuildResources>,
 }
 
@@ -156,16 +175,37 @@ const OBJECTS: [(u32, usize); 5] = [
 /// Why a BuildTable body can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The body is short, has a changed fixed value, or fails a check; the inner error names the field and offset.
     #[error("build table {0}")]
     Body(#[from] BodyError),
+    /// A typed value's kind has no known width; `at` is the offset of the kind word.
     #[error("build table value of kind {kind:#x} at {at} isn't read")]
-    Kind { kind: u32, at: usize },
+    Kind {
+        /// The kind word found.
+        kind: u32,
+        /// The body offset of the kind word.
+        at: usize,
+    },
+    /// An embedded object's class is not one of the five whose body length is known; `at` is the offset of the object.
     #[error("build table object of class {class:#010x} at {at} isn't read")]
-    Class { class: u32, at: usize },
+    Class {
+        /// The class id found.
+        class: u32,
+        /// The body offset of the object.
+        at: usize,
+    },
+    /// Bytes remain after the last `DynamicResources`; the count is how many.
     #[error("build table: {0} bytes after its last resources")]
     Trailing(usize),
+    /// A value was asked for as a reference or link but is of another kind.
     #[error("a value of kind {kind:#x} isn't a {want}")]
-    NotThat { kind: u32, want: &'static str },
+    NotThat {
+        /// The value's kind.
+        kind: u32,
+        /// What was asked for (`"reference"` or `"link"`).
+        want: &'static str,
+    },
+    /// A value of reference kind holds a malformed 10-byte reference.
     #[error(transparent)]
     Reference(#[from] reference::Error),
 }

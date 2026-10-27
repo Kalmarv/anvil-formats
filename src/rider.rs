@@ -29,12 +29,16 @@ pub const BODY: &str = "MAD_CHR_BODY_U";
 /// Why the rider's tables can't be listed.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Reading an entry from the archive failed.
     #[error(transparent)]
     Archive(#[from] archive::Error),
+    /// A BuildTable body could not be read.
     #[error(transparent)]
     Table(#[from] build_table::Error),
+    /// The archive's forges hold no BuildTable with this name.
     #[error("no BuildTable named {0} in the forges")]
     NoTable(&'static str),
+    /// The id is not an entry of the archive, or its entry is not a BuildTable.
     #[error("{0:#x} is not a BuildTable")]
     NotATable(u64),
 }
@@ -43,17 +47,24 @@ pub enum Error {
 /// weights are population odds except where a row states 1.0 among 0.0s: [`stated`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct VariantRow {
+    /// The ClassID of the variant's table.
     pub table: u64,
+    /// The variant table's entry name.
     pub name: String,
+    /// The listing row's weight, as stored.
     pub weight: f32,
+    /// The listing row's condition, as stored.
     pub condition: u32,
 }
 
 /// A part table a slot lists, and the variants its materials table lists.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CatalogPart {
+    /// The ClassID of the part's table.
     pub table: u64,
+    /// The part table's entry name.
     pub name: String,
+    /// The part's variants, in the order its materials table lists them; empty when no materials table is found.
     pub variants: Vec<VariantRow>,
 }
 
@@ -63,10 +74,13 @@ pub struct RiderSlot {
     /// The table's entry name, and the key it gives: the name without its `MAD_CHR_SLOT_` or `MAD_CHR_BODY_`
     /// prefix, in lower case (`ubody`, `heads`).
     pub table_name: String,
+    /// The key derived from `table_name`.
     pub key: String,
+    /// The ClassID of the slot's table.
     pub table: u64,
     /// The table is listed by the weight-1.0 row of [`SLOTS_DEFAULT`] or [`BODY`] (the default composition).
     pub in_default: bool,
+    /// The part tables the slot reaches, in the order found.
     pub parts: Vec<CatalogPart>,
     /// The one part whose row has weight exactly 1.0 among the slot's rows, where the table states one.
     pub stated: Option<u64>,
@@ -75,6 +89,7 @@ pub struct RiderSlot {
 /// Every slot with the parts and variants it lists.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RiderCatalog {
+    /// The slots, in the order [`SLOTS_DEFAULT`] then [`BODY`] list them.
     pub slots: Vec<RiderSlot>,
 }
 
@@ -345,9 +360,13 @@ pub const BEARD_COLOURS: &str = "MAD_CHR_BODY_BEARDS_Materials";
 /// stored (population odds, no default) and the name of the Material the row's first column links.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Colour {
+    /// The ClassID of the colour table that lists the colour.
     pub table: u64,
+    /// The entry name of the Material the row's first Material column links.
     pub name: String,
+    /// The row's condition, as stored.
     pub condition: u32,
+    /// The row's weight, as stored.
     pub weight: f32,
 }
 
