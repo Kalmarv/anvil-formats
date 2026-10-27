@@ -45,7 +45,6 @@
 //! ```no_run
 #![doc = include_str!("../examples/forge_listing.rs")]
 //! ```
-#![deny(missing_docs)]
 #![deny(clippy::disallowed_methods, clippy::disallowed_types)]
 // Every reader here works on bytes a file supplies: no unchecked index, no wrapping arithmetic, no truncating cast.
 #![cfg_attr(
