@@ -46,7 +46,12 @@ pub enum Error {
     NoForges(PathBuf),
     /// The forge named is not one of the forges found in the install.
     #[error("forge {forge} is not among the install's: {}", .opened.join(", "))]
-    NoForge { forge: String, opened: Vec<String> },
+    NoForge {
+        /// The forge file's name that was asked for.
+        forge: String,
+        /// The names of the forges found in the install.
+        opened: Vec<String>,
+    },
     /// The entry is past the forge's tables, or is not a MaterialTemplate.
     #[error("entry {entry} of {forge} {what}")]
     NotATemplate {

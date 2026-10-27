@@ -15,23 +15,41 @@
 use primase_foundations::bytes::{Cursor, Endian, Field, FieldError};
 
 const LE: Endian = Endian::Little;
+/// The class id of a MeshShape.
 pub const MESH_SHAPE: u32 = 0xB22B_3E61;
+/// The class id of a CapsuleShape.
 pub const CAPSULE_SHAPE: u32 = 0xB859_9052;
+/// The class id of a ListShape, a shape holding child shapes.
 pub const LIST_SHAPE: u32 = 0x86EB_FD8D;
+/// The class id of a BarrelShape, read as a transformed convex hull ([`Shape::Convex`]).
 pub const BARREL_SHAPE: u32 = 0x97CD_8890;
+/// The class id of a BoxShape.
 pub const BOX_SHAPE: u32 = 0x4EC6_8E98;
+/// The class id of a SphereShape.
 pub const SPHERE_SHAPE: u32 = 0xFA3F_7A18;
+/// The class id of a MultiMeshShape.
 pub const MULTI_MESH_SHAPE: u32 = 0x9A50_3477;
+/// The class id of a MultiInertComponent.
 pub const MULTI_INERT_COMPONENT: u32 = 0x8BBE_EE57;
+/// The class id of an SWCollisionMaterial, the object a shape's `surface_id` names.
 pub const SURFACE_MATERIAL: u32 = 0xEF0C_7E58;
+/// The class id of an InertComponent.
 pub const INERT_COMPONENT: u32 = 0x0E5A_450A;
 
+/// Why a collision object can't be read.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The object ends before a field is complete.
     #[error(transparent)]
     Field(#[from] FieldError),
+    /// A field has a value the format does not allow (a wrong class id, a non-finite float, an index past its list, a nesting deeper than 64, or trailing bytes); `field` names it.
     #[error("collision {field}: {why}")]
-    Invalid { field: &'static str, why: String },
+    Invalid {
+        /// The field that was refused.
+        field: &'static str,
+        /// What is wrong with it.
+        why: String,
+    },
 }
 
 fn invalid(field: &'static str, why: impl Into<String>) -> Error {
@@ -77,8 +95,11 @@ fn blob<'a>(c: &mut Cursor<'a>, field: &'static str) -> Result<&'a [u8], Error> 
 /// The stored collision filter; layer and part are kept as source enum values.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Filter {
+    /// The Filter object's id.
     pub id: u32,
+    /// The collision layer, as the source enum value.
     pub layer: u32,
+    /// The collision part, as the source enum value.
     pub part: u32,
 }
 impl Filter {
@@ -96,22 +117,34 @@ impl Filter {
 /// One explicit collision triangle with its source material object's id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Triangle {
+    /// The three vertex indices into [`MeshShape::vertices`].
     pub indices: [u32; 3],
+    /// The object id of the triangle's SWCollisionMaterial.
     pub surface_id: u32,
 }
 
 /// A mesh collision shape, in local source coordinates. Vertices remain float4 (w=0); AABBs retain their stored w.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MeshShape<'a> {
+    /// The shape object's id.
     pub id: u32,
+    /// The vertices (x, y, z, w) in the shape's local frame; w is 0.
     pub vertices: Vec<[f32; 4]>,
+    /// The triangles, in stored order.
     pub triangles: Vec<Triangle>,
+    /// The object ids of the SWCollisionMaterials the triangles' material indices select, in stored order.
     pub materials: Vec<u32>,
+    /// One byte per triangle: its position in `materials`, as stored.
     pub material_indices: &'a [u8],
+    /// The Havok MOPP acceleration bytes, undecoded.
     pub mopp: &'a [u8],
+    /// The four f32 stored after the MOPP bytes: its offset and scale.
     pub mopp_offset_and_scale: [f32; 4],
+    /// The shape's collision filter.
     pub filter: Filter,
+    /// The stored MOPP code version; 5 is the only value read.
     pub mopp_version: u32,
+    /// The shape's local bounding box: minimum then maximum, each four f32; the fourth lane is as stored.
     pub bounds: [[f32; 4]; 2],
 }
 
@@ -211,55 +244,93 @@ impl<'a> MeshShape<'a> {
 /// retained (1, 2, 5); a consumer resolves the referenced object in its chosen archive order.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Child<'a> {
+    /// A shape stored in place.
     Inline(Box<Shape<'a>>),
-    Reference { tag: u8, id: u32 },
+    /// A shape named by object id; the consumer resolves it. `tag` (1, 2 or 5) is the pointer tag as stored.
+    Reference {
+        /// The pointer tag as stored: 1, 2 or 5.
+        tag: u8,
+        /// The referenced shape's object id.
+        id: u32,
+    },
+    /// No child (pointer tag 3).
     Null,
 }
 
 /// Authored shape data; no tessellation, hull construction or choice of destination surfaces happens here.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Shape<'a> {
+    /// A MeshShape.
     Mesh(MeshShape<'a>),
     /// The contained entity/shape arrays and MOPP as authored. Pairing is retained by position; the consumer
     /// resolves the contained entities' own transforms, not the containing MultiInert entity's transform.
     MultiMesh {
+        /// The shape object's id.
         id: u32,
+        /// The ids of the contained entities, in stored order.
         entity_ids: Vec<u32>,
+        /// The ids of the contained shapes, one per entity and in the same order.
         shape_ids: Vec<u32>,
+        /// The Havok MOPP acceleration bytes, undecoded.
         mopp: &'a [u8],
+        /// The four f32 stored after the MOPP bytes.
         offset_and_scale: [f32; 4],
     },
+    /// A CapsuleShape: the segment from `bottom` to `top` swept by `radius`.
     Capsule {
+        /// The shape object's id.
         id: u32,
+        /// One end of the capsule's segment (x, y, z, w), as stored.
         bottom: [f32; 4],
+        /// The other end of the segment (x, y, z, w), as stored.
         top: [f32; 4],
+        /// The radius, above zero.
         radius: f32,
+        /// The object id of the SWCollisionMaterial.
         surface_id: u32,
     },
+    /// A ListShape: child shapes, inline or by reference.
     List {
+        /// The shape object's id.
         id: u32,
+        /// The children, in stored order.
         children: Vec<Child<'a>>,
         /// One trailing byte in this game's list objects, absent from the AC2 schema's field list.
         flag: u8,
     },
+    /// A BoxShape.
     Box {
+        /// The shape object's id.
         id: u32,
+        /// The half extents along the box's own axes (x, y, z, w), as stored.
         half_extents: [f32; 4],
+        /// The box's transform, 16 f32 as stored.
         matrix: [f32; 16],
+        /// The object id of the SWCollisionMaterial.
         surface_id: u32,
     },
+    /// A SphereShape.
     Sphere {
+        /// The shape object's id.
         id: u32,
+        /// The sphere's centre (x, y, z, w), as stored.
         center: [f32; 4],
+        /// The radius, above zero.
         radius: f32,
+        /// The object id of the SWCollisionMaterial.
         surface_id: u32,
     },
     /// BarrelShape is authored as a transformed convex hull, not an inferred mathematical cylinder.
     Convex {
+        /// The shape object's id.
         id: u32,
+        /// The hull's transform, 16 f32 as stored.
         matrix: [f32; 16],
+        /// The hull's planes, four f32 each, as stored.
         planes: Vec<[f32; 4]>,
+        /// The hull's vertices (x, y, z, w), as stored.
         vertices: Vec<[f32; 4]>,
+        /// The object id of the SWCollisionMaterial.
         surface_id: u32,
     },
 }
@@ -395,14 +466,21 @@ impl<'a> Shape<'a> {
 /// A MultiInertComponent's own shape container. Its entity handles and bare shape ids stay unresolved.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MultiInertComponent<'a> {
+    /// The leading managed flag byte: 0 or 1.
     pub managed: u8,
+    /// The component object's id.
     pub id: u32,
+    /// The id of the embedded resource reference.
     pub resource_id: u32,
+    /// The resource reference's kind byte, as stored.
     pub resource_kind: u8,
+    /// The resource reference's target id.
     pub resource_target: u32,
+    /// The component's shape, which must be a MultiMeshShape.
     pub shape: Shape<'a>,
 }
 impl<'a> MultiInertComponent<'a> {
+    /// Reads a whole MultiInertComponent; refuses a wrong class id, a shape that is not a MultiMeshShape and trailing bytes.
     pub fn parse(bytes: &'a [u8]) -> Result<Self, Error> {
         let (value, used) = Self::parse_prefix(bytes)?;
         if used != bytes.len() {
@@ -457,23 +535,37 @@ impl<'a> MultiInertComponent<'a> {
 pub struct InertComponent {
     /// The managed byte is 0 for the measured inline inert; standalone objects commonly store 1.
     pub managed: u8,
+    /// The component object's id.
     pub id: u32,
+    /// The id of the embedded resource reference.
     pub resource_id: u32,
+    /// The resource reference's kind byte, as stored.
     pub resource_kind: u8,
+    /// The resource reference's target id.
     pub resource_target: u32,
+    /// The `damage` word, as stored.
     pub damage: u32,
+    /// The id of the embedded rigid body object.
     pub rigid_body_id: u32,
+    /// The rigid body's collision filter.
     pub filter: Filter,
+    /// The id of the shape the rigid body uses.
     pub shape_id: u32,
+    /// The mass, finite.
     pub mass: f32,
+    /// The linear then angular damping, each finite.
     pub damping: [f32; 2],
+    /// The four rigid body flag bytes, as stored.
     pub flags: [u8; 4],
+    /// The inertia tensor, 16 f32 as stored.
     pub inertia: [f32; 16],
+    /// The `walkability` word, as stored.
     pub walkability: u32,
     /// The remaining 12 authored bytes, whose meaning is not established.
     pub tail: [u8; 12],
 }
 impl InertComponent {
+    /// Reads a whole InertComponent; refuses a wrong class id, a non-finite float and trailing bytes.
     pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
         let mut c = Cursor::new(bytes);
         let managed = c.u8().field("managed flag")?;
