@@ -1,5 +1,4 @@
-//! Real CompiledMips read as stored (Riders Republic build 25394987): the four a separate read-only decode checked
-//! (games/riders-republic docs/recon/compiled-mip-reader-request.md, f9925f0).
+//! Real CompiledMips read as stored (Riders Republic build 25394987): the four a separate read-only decode checked.
 mod inputs;
 
 use std::fs::File;

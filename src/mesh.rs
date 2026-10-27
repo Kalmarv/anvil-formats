@@ -39,9 +39,8 @@
 //! read, not refused.
 //!
 //! Established on seven ranged meshes (Riders Republic build 25394987: one to six records, strides 24; every byte to
-//! the body's end accounted for, games/riders-republic docs/recon/material-chain-binding.md, 2b3215e) and two inline
-//! ones (the Favela BigTurn A and B LOD0s, 72,260 and 93,906 vertices; docs/recon/layoutb-favela-observation.md,
-//! d099244). Observed, not required: no range is empty and every vertex is named. A descriptor's vertex count is its
+//! the body's end accounted for) and two inline
+//! ones (the Favela BigTurn A and B LOD0s, 72,260 and 93,906 vertices). Observed, not required: no range is empty and every vertex is named. A descriptor's vertex count is its
 //! range's low 16 bits (the two inline meshes' counts pass 65535 and are stored so). That descriptor *k* is range *k*'s
 //! material is read from their order and the counts agreeing; how the engine binds it is not established. The bytes
 //! kept as stored are not interpreted.
@@ -57,7 +56,7 @@ use std::ops::Range;
 
 /// One `MeshBone` of a Mesh's bone list: a bone the mesh's skin stream may name, as the 81-byte record stores it
 /// (an object id of 0, the class `MeshBone`, then the registry's three fields, `BoneID`, `InitialMatrixInverse` and
-/// `IsUsedBySubMeshes`; docs/registry-named-fields.md §4).
+/// `IsUsedBySubMeshes`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredMeshBone {
     /// `BoneID`: by value the CRC-32 of the bone's name, the key of a skeleton's [`crate::skeleton::StoredBone::name_hash`].
@@ -644,7 +643,7 @@ fn f32s(b: &[u8; 12]) -> [f32; 3] {
 }
 
 /// A Mesh body's `MaxCullingDistance`: its GraphicObject's f32 at 4, after the ManagedObject byte, `DescriptorMask`,
-/// `Generated` and `VertexStride` (registry-named-fields §4, §10; 0 where the body is short).
+/// `Generated` and `VertexStride` (0 where the body is short).
 pub fn max_culling_distance(body: &[u8]) -> f32 {
     body.get(4..8)
         .and_then(|w| <[u8; 4]>::try_from(w).ok())
@@ -867,10 +866,10 @@ impl StoredMesh {
     }
 
     /// Each vertex's position. In the split layouts each positions-stream record's first three words as the engine
-    /// declares them, `R16G16B16A16_SNORM` (`max(w / 32767, -1)`, docs/vertex.md "The engine's vertex declarations"),
+    /// declares them, `R16G16B16A16_SNORM` (`max(w / 32767, -1)`),
     /// times a scale, the f32 at bytes 4..8 of the last material descriptor's last 8 bytes (whose first four hold 31)
     /// (RRAssetStudio divides by 32768: 3e-5 relative); otherwise [`StoredVertices::positions`], equal bit for bit to
-    /// RRAssetStudio's on every mesh both read (the census gate). A zero product is +0. For the split layouts the decoded
+    /// RRAssetStudio's on every mesh both read (the census test). A zero product is +0. For the split layouts the decoded
     /// extrema lie within three steps of the compiled mesh's stored centre and extent (marker+38, +50) on every one.
     pub fn positions(&self) -> Result<Vec<[f32; 3]>, Error> {
         if self.positions_stream.is_empty() {
@@ -1039,7 +1038,7 @@ impl StoredMesh {
     /// the ranges ([`StoredMesh::stale_entries`], [`StoredMesh::stale_descriptors`]): on some meshes they describe
     /// another layout, where the range records, the buffers and RRAssetStudio agree on the ranges (GFX_WireFrame_Wall_01
     /// LOD0, DataPC 38624: entry and descriptor 8,845 vertices, the buffers 2,490, which the bounds, the compiled head
-    /// and RRAssetStudio agree with: the Riders Republic notes, docs/format.md). In the inline layout, which has no range
+    /// and RRAssetStudio agree with: the Riders Republic survey). In the inline layout, which has no range
     /// records, the descriptor's count must be the range's vertex count's low 16 bits and the entries must agree.
     pub fn materials(&self) -> Result<Vec<u64>, Error> {
         let ranges = self.ranges()?;

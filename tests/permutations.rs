@@ -1,7 +1,6 @@
 //! Every MaterialTemplate of the six forges (Riders Republic build 25394987): its shader permutations read
-//! (read::template::permutations), each record's UCodeHash naming exactly one of its programs. Against the notes'
-//! counts (docs/material-spec.md §25: 432 templates, 177,578 records, every hash resolving) and the engine's key
-//! composer for Rocks (docs/shaders.md §6.2): a plain static Rocks G-buffer draw's pixel key 0x400000 names the
+//! (read::template::permutations), each record's UCodeHash naming exactly one of its programs. Against the survey's counts
+//! (432 templates, 177,578 records, every hash resolving) and the engine's key composer for Rocks: a plain static Rocks G-buffer draw's pixel key 0x400000 names the
 //! program at 0x25A2D, its roughness the detail normal's alpha.
 mod inputs;
 

@@ -10,7 +10,7 @@
 //!   The tag is 0x1C14 on nodes with children and 0x9C14 on leaves; its low byte, 0x14, is the version this layout is
 //!   read for (others are refused).
 //!
-//! The grammars are the Riders Republic notes' (docs/terrain.md §3, consumed exactly on every node of MAD_USNAT), the
+//! The grammars are the Riders Republic survey's (consumed exactly on every node of MAD_USNAT), the
 //! quadtree order theirs (each node's a and b against the FloorHeightData cells under it, Spearman 0.96 to 1.00 per
 //! level, other orders -0.65 or less). Blocks 0 and 2 to 7 are coded (see [`crate::tnl_code`]); blocks 1 and 8
 //! are LZ4 blocks of planar BC1 and BC4 tiles.

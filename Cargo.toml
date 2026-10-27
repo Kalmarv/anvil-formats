@@ -1,6 +1,10 @@
 [package]
 name = "anvil-formats"
-description = "Anvil engine formats: forge archives (versions 26 and 27), their data blocks and the resources they hold (entities, meshes, materials, templates, textures, animation, terrain), and Shaun White Skateboarding's records and SDB2 shader databases"
+description = "Readers for Ubisoft Anvil engine data: .forge archives and the meshes, textures, materials, entities and terrain inside (Riders Republic, Shaun White Skateboarding)"
+keywords = ["anvil", "forge", "game-formats", "riders-republic", "modding"]
+categories = ["parser-implementations", "game-development"]
+readme = "README.md"
+documentation = "https://docs.rs/anvil-formats"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

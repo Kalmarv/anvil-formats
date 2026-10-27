@@ -1,4 +1,10 @@
-//! Readers of the Anvil engine's formats: bytes in, plain records out.
+//! Readers for the data files of Ubisoft's Anvil engine: bytes in, plain records out.
+//!
+//! Written against Riders Republic (Steam build 25394987; `.forge` archives of version 27, zstd-compressed) and
+//! Shaun White Skateboarding (PC, 2010; version 26, LZO2A). The formats were worked out from those games' own files and
+//! checked against them, with third-party readers (AnvilToolkit, ACExplorer, RRAssetStudio) as cross-checks where they
+//! exist; the Engine wiki records the formats: <https://kalmarv.github.io/engine-wiki/engines/anvil/>. Docs here cite
+//! "the Riders Republic survey" for the census those pages are drawn from.
 //!
 //! - **Containers.** A `.forge` archive of version 26 or 27 ([`forge`]): its index, each entry's offset, size and
 //!   ids as stored, and each entry's name record. An entry's data blocks ([`data`]): compression version 2 (zstd) or
@@ -21,6 +27,14 @@
 //!
 //! Where a grammar depends on the game's class registry (an Entity's components without a length rule are found by
 //! their headers' component types), the caller supplies that registry: see [`entity::StoredEntity::parse`].
+//!
+//! # Example
+//!
+//! Count a Riders Republic forge's entries by kind, then read its first Mesh (this is `examples/forge_listing.rs`):
+//!
+//! ```no_run
+#![doc = include_str!("../examples/forge_listing.rs")]
+//! ```
 #![deny(clippy::disallowed_methods, clippy::disallowed_types)]
 
 pub mod animation;

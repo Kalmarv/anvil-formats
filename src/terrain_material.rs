@@ -6,12 +6,12 @@
 //!   references (TerrainMaterials), a u32 count and that many references (region objects), one reference (a
 //!   TextureMap).
 //! - **TerrainMaterial** (202 bytes): its bytes kept as stored; at 2 an f32, the detail's uv scale (the engine's
-//!   per-material record holds it, the notes' read of the runtime array: docs/terrain.md §3.5 (a)); at 6 an f32 (1 to
+//!   per-material record holds it, the survey's read of the runtime array); at 6 an f32 (1 to
 //!   200: the detail tile's size in metres, a lead); at 17 a u64, its TextureSet's id (bytes 15 and 16 zero, not the
-//!   reference grammar; the detail maps: slot 0 the diffuse on 103 of 105, by the notes); at 180 a reference to its
-//!   CollisionMaterial, at 198 a u32 (its position in the bank, by the notes).
+//!   reference grammar; the detail maps: slot 0 the diffuse on 103 of 105, by the survey); at 180 a reference to its
+//!   CollisionMaterial, at 198 a u32 (its position in the bank, by the survey).
 //!
-//! The grammars are the Riders Republic notes' (docs/terrain.md §4 and §3.4: TMB_MAD consumed exactly; 202 bytes on
+//! The grammars are the Riders Republic survey's (TMB_MAD consumed exactly; 202 bytes on
 //! every TerrainMaterial), read on every one of the game's by a census. That a node's
 //! raster value indexes the bank's TerrainMaterials in stored order is theirs too (each value's mean colour and slope
 //! against its material's name, over 87 million samples). The rest of a TerrainMaterial isn't read.

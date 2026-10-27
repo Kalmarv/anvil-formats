@@ -1,4 +1,4 @@
-//! TimeOfDay/WeatherPropertyControllerData's registry-ordered entries (lighting.md §6–7).
+//! TimeOfDay/WeatherPropertyControllerData's registry-ordered entries.
 //! The packed track header includes the first key's time in its upper half. No scanning of float payloads for
 //! coincidental ClassIDs: each nested header, path node, key vector and trailer is consumed in order.
 #![deny(

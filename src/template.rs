@@ -16,20 +16,20 @@
 //! Its binding records ([`bindings`]), found the same way, by their marker: each 0x92D220DD, a u32 key (a property's,
 //! as a Material's records carry it), four u32 f1 to f4, a reference (or a tag-0 form, kept), then 8 bytes kept as
 //! stored. By (f3, f4) the
-//! Riders Republic notes read a record as a texture at shader slot t(75 + f1), a scalar in the material constant
-//! buffer's vec4 f2, a vec4 there, or a UV transform's two rows from vec4 f2 (docs/material-spec.md §2: executing the
+//! Riders Republic survey reads a record as a texture at shader slot t(75 + f1), a scalar in the material constant
+//! buffer's vec4 f2, a vec4 there, or a UV transform's two rows from vec4 f2 (executing the
 //! game's pixel shaders on values so placed reproduces their outputs); how far the run extends isn't established, so
 //! every record found is returned, none inferred.
 //!
 //! Each binding record is a ShaderParameter whose 10 bytes link an Operator of the template's material graph
-//! ([`operator`]; registry-named-fields §12, read by the class registry on every template body): a ConstantFloatValue,
+//! ([`operator`]; read by the class registry on every template body): a ConstantFloatValue,
 //! ConstantVectorValue or ConstantIntegerValue holding the property's default `Value`, a UVTransformOperator holding
-//! its default UVTransform, a TextureObject holding its TextureSelector (the TextureParameter record of material-spec
-//! §27.0, [`texture_parameter`]: marker 0x7D08460D, a byte 0, its `TextureSpecificationMethod` (the channel) and
+//! its default UVTransform, a TextureObject holding its TextureSelector (the TextureParameter record,
+//! [`texture_parameter`]: marker 0x7D08460D, a byte 0, its `TextureSpecificationMethod` (the channel) and
 //! `MapType` (the TextureSet slot), a u32 0, and the default set and texture, each null where the template names none)
 //! and its `SamplerMode`. A texture binding may instead link a ShaderCustomTextureOperator (36 in the game's templates,
 //! 14 templates): the TextureObject definition instanced through the custom-operator mechanism, with the same
-//! TextureSelector (docs/material-spec.md §27.0), read by walking its stored pins ([`custom_texture`]). A census
+//! TextureSelector, read by walking its stored pins ([`custom_texture`]). A census
 //! (tests/template_defaults.rs) reads every binding's Operator on every MaterialTemplate, against the
 //! registry's worked examples.
 #![deny(
@@ -48,7 +48,7 @@ pub use crate::material::MATERIAL_TEMPLATE;
 pub const DESCRIPTOR: u32 = 0xD933_DB50;
 /// A binding record's marker.
 pub const BINDING: u32 = 0x92D2_20DD;
-/// The type of a template's shader-state node (the notes, docs/material-spec.md §21: one in every template body, 428 of
+/// The type of a template's shader-state node (the survey: one in every template body, 428 of
 /// 428), whose id follows the descriptor run directly.
 pub const SHADER_STATE: u32 = 0xB4FD_3A4C;
 
@@ -74,7 +74,7 @@ pub enum Target {
     Stored([u8; 10]),
 }
 
-/// What a binding record binds, by its (f3, f4), as the Riders Republic notes read it.
+/// What a binding record binds, by its (f3, f4), as the Riders Republic survey reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BindingKind {
     /// (0, 3): a texture, at shader slot t(75 + f1).
@@ -203,7 +203,7 @@ impl Binding {
     }
 }
 
-/// The class of each Operator a ShaderParameter links (registry-named-fields §12).
+/// The class of each Operator a ShaderParameter links.
 pub const CONSTANT_FLOAT: u32 = 0xA475_5364;
 pub const CONSTANT_VECTOR: u32 = 0x6497_30E3;
 pub const CONSTANT_INTEGER: u32 = 0xA026_AFF2;
@@ -215,7 +215,7 @@ pub const TEXTURE_ARRAY: u32 = 0x4C6B_3C62;
 /// A texture binding's custom operator (see [`custom_texture`]).
 pub const SHADER_CUSTOM_TEXTURE_OPERATOR: u32 = 0x1181_BD58;
 /// The pin classes of a ShaderCustomOperator's output and input lists: FloatOutput, VectorOutput, TextureOutput and
-/// IntegerOutput; FloatInput, VectorInput and TextureInput (registry-named-fields §12).
+/// IntegerOutput; FloatInput, VectorInput and TextureInput.
 const OUTPUT_PINS: [u32; 4] = [0x63AD_2CDD, 0x1603_ED4D, 0x3A8A_5517, 0x2C74_BF29];
 const INPUT_PINS: [u32; 3] = [0xA10B_3D7E, 0x6569_31BC, 0x354F_E002];
 /// The name of the definition a custom texture operator instances: the TextureObject's.
@@ -260,7 +260,7 @@ fn input_pin(body: &[u8], at: usize) -> Result<usize, BindingError> {
     }
 }
 
-/// The Operator the binding `b` of `body` links (registry-named-fields §12): its header `[tag][u64 id][u32 class]` where
+/// The Operator the binding `b` of `body` links: its header `[tag][u64 id][u32 class]` where
 /// the linked id first occurs, its body after the class (the offsets below from the class's first byte: a constant's
 /// `Value` at 31, after its byte, `Active`, `ConstantID`, `Private` and its output pin; a UVTransformOperator's input
 /// pin at 26 and its owned UVTransform after it; a TextureObject's eight output pins from 6, its TextureCoords input
@@ -341,8 +341,7 @@ pub fn operator(body: &[u8], b: &Binding) -> Result<Option<OperatorDefault>, Bin
 }
 
 /// A ShaderCustomTextureOperator whose class id starts at `class_at`: its body walked field by field (the
-/// registry's order, base classes first; verified on all 36 in the game's templates, docs/material-spec
-/// §27.0). After the class: a byte (0 or 1), the Operator's `Active` byte (1), a string (the `ShaderCustomOperator`'s
+/// registry's order, base classes first; verified on all 36 in the game's templates). After the class: a byte (0 or 1), the Operator's `Active` byte (1), a string (the `ShaderCustomOperator`'s
 /// definition name, which must be `TextureObject`: this operator is that definition instanced, so its selector
 /// selects as a TextureObject's does), a u32 count and that many output pins (a tag byte 0 or 4, then a pin of 20
 /// bytes: a u64 id, its class and a u64 tag), a u32 count and that many input pins (a tag byte, a pin of 20 bytes and
@@ -536,7 +535,7 @@ fn run(body: &[u8], first: usize) -> Option<Vec<Descriptor>> {
 
 /// The template body's descriptor run: the one place where a u32 count is followed by that many descriptors read
 /// whole. A body holding no descriptor marker has an empty run where its count, 0, stands 12 bytes before the type
-/// of its one shader-state node (the node's id between: §21, 16 of 428 templates). Refused when there is no run, or
+/// of its one shader-state node (the node's id between, 16 of 428 templates). Refused when there is no run, or
 /// more than one.
 pub fn descriptors(body: &[u8]) -> Result<Vec<Descriptor>, Error> {
     let marker = DESCRIPTOR.to_le_bytes();
@@ -588,8 +587,7 @@ pub fn descriptors(body: &[u8]) -> Result<Vec<Descriptor>, Error> {
 /// The shader programs a template's body holds: each DXBC container, by the offset of its magic in the body, found
 /// by that magic and proven by its own stored checksum ([`dxcontainer::checksum`]): a `DXBC` whose stated size
 /// runs past the body, or whose checksum isn't its bytes', isn't one (the bytes there are something else). The
-/// Riders Republic notes read 24 bytes before each (a hash, a u32, 0x7C7AC9C7 and the size: docs/material-spec.md
-/// §13.3); which material state selects which program isn't read.
+/// Riders Republic survey reads 24 bytes before each (a hash, a u32, 0x7C7AC9C7 and the size); which material state selects which program isn't read.
 pub fn shaders(body: &[u8]) -> Vec<(usize, &[u8])> {
     let mut out = Vec::new();
     let mut at = 0usize;
@@ -631,7 +629,7 @@ pub enum Stage {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Permutation<'b> {
     pub stage: Stage,
-    /// The engine's ShaderKey (bits 22 to 29 its pass: docs/shaders.md §6.2).
+    /// The engine's ShaderKey (bits 22 to 29 its pass).
     pub key: u32,
     /// Its program's UCodeHash (the u32 after the program, as stored).
     pub code_hash: u32,
@@ -672,8 +670,8 @@ pub enum PermutationError {
 type StageRead = Result<Stage, String>;
 
 /// Every shader permutation a template body lists (CompiledMaterialTemplate's vertex and pixel ShaderPermutations:
-/// docs/shaders.md §6, docs/material-spec.md §25, read from the engine's class registry): each record a u64 0, the
-/// record type, the ShaderKey, a u32 parameter count (0 on all 177,578 the notes count: another is refused), the
+/// read from the engine's class registry): each record a u64 0, the
+/// record type, the ShaderKey, a u32 parameter count (0 on all 177,578 the survey counts: another is refused), the
 /// UCodeHash and 16 bytes, found by its first 12 bytes (the byte after it, 0 between records, isn't read). Its program is the one container ([`shaders`])
 /// whose framing stores that UCodeHash after it (each container: `0x7C7AC9C7`, its size, the container, then the
 /// UCodeHash, a u32 and a u64); one whose hash names no container or several is refused, and one whose container has
@@ -766,10 +764,10 @@ pub enum FeatureError {
     Unterminated(usize),
 }
 
-/// The body of a template's shader-state node (class `0xB4FD3A4C`, the `FeaturePreset` node of the notes), as stored:
+/// The body of a template's shader-state node (class `0xB4FD3A4C`, the `FeaturePreset` node of the survey), as stored:
 /// the bytes between its class word and the class word of the `CompiledMaterialTemplate` record that follows it (54
 /// bytes on all 432 templates). The first is the object's byte, then one byte per template feature, 0 or 1: the
-/// engine's feature word `T` of the key composer (docs/shaders.md §6.2) has feature n at byte n + 1. Established by
+/// engine's feature word `T` of the key composer) has feature n at byte n + 1. Established by
 /// the census of `tests/template_features.rs`: on all 432 templates the bytes for T bits 3 and 4 (key bits 0x400,
 /// 0x800 and 0x200), 9 (0x1000), 10 (LayerMaterial's 0x4 and 0x20), 11 (the forward pass's 0x8), 12 (0x40), 13 (0x2)
 /// and 15 (0x80; its byte is 1 or 2) are set exactly where the template stores a permutation key with the bit they gate.
@@ -840,8 +838,8 @@ impl ShaderTables {
         self.programs.get(program).map(Vec::as_slice)
     }
 
-    /// The stored byte of feature `n` (bit `n` of the engine's feature word `T`, which gates bits of the ShaderKey:
-    /// docs/shaders.md §6.2): byte `n + 1` of the template's shader-state node, `None` where the node has no such byte.
+    /// The stored byte of feature `n` (bit `n` of the engine's feature word `T`, which gates bits of the ShaderKey):
+    /// byte `n + 1` of the template's shader-state node, `None` where the node has no such byte.
     /// It is 0 or 1 for every feature but 15, which is also 2 on 82 of the 432 templates (see `tests/template_features.rs`).
     pub fn feature_byte(&self, n: usize) -> Option<u8> {
         self.feature_node.get(n.checked_add(1)?).copied()

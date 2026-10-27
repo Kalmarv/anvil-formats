@@ -17,7 +17,7 @@
 //!   `AnimTrackDataMapping` array (a u32 count; each element a u64 id (0), the type 0x653CAA76 and a u32: **the CRC-32
 //!   of a bone's name**, the key of a Skeleton's bones; 0 for the root's tracks), and `66A6DC91` (u16, 0 on all);
 //! - the `ECLAnimation` pointer: `03` (none) or `00`, a u64 id and the type 0xAC692A57 (`TTECLAnimation`), then its
-//!   fields, a byte array (the notes: "tt-animation" strings), a u32 array, a u16 array and a byte array;
+//!   fields, a byte array (the survey: "tt-animation" strings), a u32 array, a u16 array and a byte array;
 //! - `B832D26F`, a byte buffer (a u32 length), and `CB4E5F18` (u32).
 //!
 //! Then the tracks: a u32 count (the mappings' count, one track to each, in order) and that many blocks. A block is

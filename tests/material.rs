@@ -1,5 +1,5 @@
 //! Real Materials and a TextureSet read as stored, their references resolved within their forge (Riders Republic
-//! build 25394987; games/riders-republic docs/recon/material-reference-envelope.md, e244d10).
+//! build 25394987).
 mod inputs;
 
 use std::fs::File;

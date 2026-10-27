@@ -1,4 +1,4 @@
-//! WhiteRoom SpotLight records. Offsets established in riders-republic/docs/lighting.md §2. Stored intensity
+//! WhiteRoom SpotLight records. Offsets established in the Riders Republic survey of lighting. Stored intensity
 //! units and shadow booleans remain source data; a caller must state its calibration.
 #![deny(
     clippy::arithmetic_side_effects,

@@ -1,5 +1,4 @@
-//! A Mesh's vertex attributes decoded as the engine's vertex declarations state them (Riders Republic docs/vertex.md,
-//! "The engine's vertex declarations": the element lists, one per `VertexFormat`, which is the Mesh's kind byte, read
+//! A Mesh's vertex attributes decoded as the engine's vertex declarations state them (Riders Republic: the element lists, one per `VertexFormat`, which is the Mesh's kind byte, read
 //! from the runtime image with their DXGI formats; each layout's vertex programs' arithmetic from their disassembly;
 //! every layout's input signature the same semantics in all 432 templates' vertex permutations).
 //!

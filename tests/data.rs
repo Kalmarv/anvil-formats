@@ -264,7 +264,7 @@ fn two_real_mesh_resources_decode() {
 }
 
 /// A real CompiledMip of three chunks (base forge entry 373, Riders Republic build 25394987; layout and values
-/// hand-checked in a separate read-only decode, games/riders-republic docs/recon/texture-layout.md, dcb4f2b): each
+/// hand-checked in a separate read-only decode): each
 /// chunk's sizes and checksum, the total, and the resource's type and name (its name record's).
 #[test]
 fn a_real_three_chunk_mip_decodes() {
@@ -298,8 +298,7 @@ fn a_real_three_chunk_mip_decodes() {
 }
 
 /// A resource's ClassID is its entry's index id, and a reference to another resource resolves by it: one Material ->
-/// TextureSet -> textures chain of the base forge (ids and ordinals hand-checked in a separate read-only decode,
-/// games/riders-republic docs/recon/material-binding.md, ceebc6e). Only the id resolution is claimed, not the
+/// TextureSet -> textures chain of the base forge (ids and ordinals hand-checked in a separate read-only decode). Only the id resolution is claimed, not the
 /// Material's or TextureSet's field layout.
 #[test]
 fn class_ids_are_index_ids_and_resolve() {

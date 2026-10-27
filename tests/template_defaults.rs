@@ -2,7 +2,7 @@
 //! (build 25394987) that links a TextureObject has its TextureSelector read ([`texture_parameter`]), none shared by
 //! two bindings of one template; a binding may link a ShaderCustomTextureOperator, whose own selector is read the same
 //! way ([`template::custom_texture`]); the others link another Operator or nothing.
-//! Against the notes' worked examples (material-spec §27.0): MAD_Screens_Simple's t76 (slot 0, channel 1, the
+//! Against the survey's worked examples: MAD_Screens_Simple's t76 (slot 0, channel 1, the
 //! Pixels_Screen_A set and its DiffuseMap), MAD_Tex1_Graffiti_Mode_DecalFX's t76 (slot 11, channel 2, the bare
 //! texture GFX_Jammer_NormalMap) and MAD_Screens_Simple's t75 (slot 0, channel 0, no default).
 mod inputs;
@@ -80,7 +80,7 @@ fn every_texture_binding_has_its_parameter() {
     // operator are read
     assert_eq!(missing.len(), 8);
     // no channel-0 record names a default; a channel-1 default is a set and its texture; a channel-2 one a bare
-    // texture (the resolution's steps, material-spec §27.0)
+    // texture (the resolution's steps)
     assert!(kinds.keys().all(|&(channel, set, texture)| match channel {
         0 => !set && !texture,
         1 => set == texture,
@@ -116,7 +116,7 @@ fn every_texture_binding_has_its_parameter() {
 }
 
 /// The first TextureParameter marker at or after where the binding's linked id first occurs (but in itself): the
-/// notes' first reading (material-spec §27.0), kept here to check the link's reading against.
+/// survey's first reading, kept here to check the link's reading against.
 fn searched(body: &[u8], b: &template::Binding) -> Option<usize> {
     let id = b.link()?.to_le_bytes();
     let object = body
@@ -130,8 +130,8 @@ fn searched(body: &[u8], b: &template::Binding) -> Option<usize> {
         .map(|k| object + k)
 }
 
-/// Every binding's linked Operator read (registry-named-fields §12), its kind by the binding's; each texture binding's
-/// TextureSelector by the link where the notes' search finds it; the registry's worked examples (DataPC bodies).
+/// Every binding's linked Operator read (per the class registry), its kind by the binding's; each texture binding's
+/// TextureSelector by the link where the survey's search finds it; the registry's worked examples (DataPC bodies).
 #[test]
 fn every_binding_links_its_operator() {
     let Some(dir) = install(Game::Riders) else {

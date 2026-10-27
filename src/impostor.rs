@@ -1,4 +1,4 @@
-//! Impostor resources (RR build 25394987). Layout evidence: riders-republic/docs/farview.md §2.
+//! Impostor resources (RR build 25394987). Layout evidence: the Riders Republic survey of the far-view data.
 //! The four references are owned by the Impostor, not by its proxy Mesh's Material.
 #![deny(
     clippy::arithmetic_side_effects,

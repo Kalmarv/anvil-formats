@@ -1,6 +1,6 @@
 //! The shader tables of every MaterialTemplate of the six forges (Riders Republic build 25394987): both stages kept,
 //! each stage's keys unique within a template and each key finding its program, every program a stored DXBC container
-//! whose shader type is its stage's. Counted: 53,180 pixel and 124,398 vertex records (177,578, the notes' count) naming
+//! whose shader type is its stage's. Counted: 53,180 pixel and 124,398 vertex records (177,578, the survey's count) naming
 //! 8,040 distinct pixel and 5,750 distinct vertex programs. All 13,790 programs were disassembled by Microsoft's
 //! `D3DDisassemble` (d3dcompiler_47): 8,040 `ps_5_0` and 5,750 `vs_5_0`, the stage each was kept under.
 //!

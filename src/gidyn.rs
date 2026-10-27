@@ -1,4 +1,4 @@
-//! GIDynResource's established one-volume/one-box profile (RR lighting.md §8, 418 offline bodies).
+//! GIDynResource's established one-volume/one-box profile (RR, 418 bodies).
 //! Preserve all four encoded streams. Probe positions are established; irradiance, visibility bit semantics,
 //! sample origin and the GPU GIDynData texture construction are not. Nothing here invents probe colours.
 #![deny(

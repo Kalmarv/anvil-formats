@@ -11,9 +11,9 @@
 //! - **GridPartition**: `01`, a u32 level count, a u32 cell count c, c cells each a u64 0, 0x3435AD40 (GridCell),
 //!   `00` and a u64 (a GridCellDataBlock's ClassID, or 0), then a u32 0.
 //! - **GridCellDataBlock**: `01`, a u32 count n, n references, a u32 (n less those to GIDynResources on every block
-//!   the notes measured), a u64 (its cell's number, or a DataLayer's ClassID).
+//!   the survey measured), a u64 (its cell's number, or a DataLayer's ClassID).
 //!
-//! Grammars from the Riders Republic notes (docs/world.md §1-2, docs/placement.md §5 and §10), consumed to the last
+//! Grammars from the Riders Republic survey, consumed to the last
 //! byte by a census on every GridPartition and GridCellDataBlock of the game. The
 //! five i32's names are AnvilToolkit's AC schemas' (a tool claim); what the u16 run, the 3 bytes and the u32 before
 //! the key are isn't read.
@@ -177,7 +177,7 @@ impl GridLayout {
     /// first, then each coarser level (half the cells a side, twice the size), each row by row from the bottom-left
     /// corner. `None` past the last cell, or where a level's dimension or size doesn't hold.
     ///
-    /// The numbering is the notes' best fit, not stored: of 4 orderings it is the one under which a listed entity's
+    /// The numbering is the survey's best fit, not stored: of 4 orderings it is the one under which a listed entity's
     /// world bounds overlap its cell on 7,769 of 7,803 sampled USNAT listings (44 of 46 in WhiteRoom; the next best
     /// 264). That the cell count is the levels' squared dimensions summed is stored (21,845, 1,365 and 85).
     pub fn cell(&self, levels: u32, k: usize) -> Option<Cell> {
@@ -238,7 +238,7 @@ mod tests {
     fn cells_number_level_0_first_row_by_row() {
         let g = white_room();
         assert_eq!(g.cell_count(4), Some(85));
-        // the notes' cell 20: x [0, 32], y [-64, -32]
+        // the survey's cell 20: x [0, 32], y [-64, -32]
         assert_eq!(
             g.cell(4, 20),
             Some(Cell {

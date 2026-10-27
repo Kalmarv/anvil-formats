@@ -6,7 +6,7 @@
 //! fill the pixels exactly, the referenced CompiledMips are exactly the missing levels' sizes, and the levels decode. The u32s at 9, 13 and 21 are read by the reference tool's names, depth, array size
 //! and dimension (1 flat, 2 cube, 3 volume; another is refused): with `layers = depth x array size x (6 for a cube)`
 //! each level holds its layers in turn, and the pixels are exactly the layers times the levels' sizes on every one of
-//! Riders Republic's 25 cube and volume maps (the Riders Republic notes, docs/texture-formats.md, the 49 refused maps;
+//! Riders Republic's 25 cube and volume maps (the Riders Republic survey, the 49 refused maps;
 //! the order within a level's bytes the tool's, the lengths established). The u32 at 25 is kept as stored. A mip count
 //! of 0 is one level (15 maps hold exactly one level's pixels so). A body that ends after a reference count of 0 and
 //! one byte 3 (a null reference's tag, its nine zeros not stored) holds no image (two debug font maps, filled at run
@@ -22,8 +22,7 @@
 //! the body: levels r to mip count - 1, largest first, each its format's size for its dimensions.
 //!
 //! Established on three TextureMaps of the base WhiteRoom forge (Riders Republic build 25394987: entries 217, 218 and
-//! 31; BC1 and BC7, 9 and 11 levels, none and two external; games/riders-republic docs/recon/texture-format-validation.md,
-//! bff28dc and 0ad60f1, where each level's bytes and both formats' decodes are checked independently). Refused, naming
+//! 31; BC1 and BC7, 9 and 11 levels, none and two external; each level's bytes and both formats' decodes were checked independently). Refused, naming
 //! it: another first byte, u32 at 9, 13 or 21, reference tag or compiled header marker, a compiled header
 //! disagreeing with the first, or pixels not ending the body. [`StoredTextureMap::levels`] slices the levels for
 //! the format codes whose storage the census establishes ([`storage`]), refusing another code or pixels the levels
@@ -48,14 +47,13 @@ pub const COMPILED_TEXTURE_MAP: u32 = 0x1323_7FE9;
 /// 2 and 3 BC1, 4 BC2, 5 BC3, 6 BC4, 7 BC5, 10 BC7, 12 R8, 20 RGBA16F (BC7 also equal to texture2ddecoder's; BC2, R8
 /// and RGBA16F also to RRAssetStudio's). 0 is B8G8R8A8, where the two tools disagree (BGRA8 or RGBA8), by what the
 /// game's own data means: the engine's built-in default normal texture (DataPC entry 139325) stores `ff 80 80 ff`, a
-/// flat normal only as B, G, R, A, and the skin-colour palette decodes to skin tones only so (the Riders Republic notes,
-/// docs/material-spec.md §7). 11 is A8 (the tools disagree, A8 or R8) by the engine itself: its create-resource record
+/// flat normal only as B, G, R, A, and the skin-colour palette decodes to skin tones only so (the Riders Republic survey). 11 is A8 (the tools disagree, A8 or R8) by the engine itself: its create-resource record
 /// in a memory snapshot of the game gives DXGI format 65 (A8_UNORM) to the one TextureMap of its size and mip count,
-/// a code-11 map (the notes, docs/texture-formats.md). 1 is R8G8B8A8_SNORM, 8 BC6H unsigned and 9 BC6H signed:
+/// a code-11 map (the survey). 1 is R8G8B8A8_SNORM, 8 BC6H unsigned and 9 BC6H signed:
 /// AnvilToolkit's table names them (RRAssetStudio's reader refuses them), and the content agrees, the rule for these
 /// three being that content evidence counts: read as signed bytes the code-1 noise map is exactly Perlin's gradient
 /// table (12 cube-edge directions, two components of +-127 and one 0 on all 256 pixels), and the code-8 and 9 maps'
-/// 2,066,602 blocks are valid BC6H on every one and decode to coherent images (the notes, docs/texture-formats.md,
+/// 2,066,602 blocks are valid BC6H on every one and decode to coherent images (the survey,
 /// the 49 refused maps). Colour space and role are not read:
 /// neither tool's table holds an sRGB format. Another code is `None`: not refused as stored, but its codec isn't
 /// established.

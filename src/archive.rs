@@ -1,7 +1,7 @@
 //! Several forges read as one: a ClassID is looked up in each, in the order the caller gives them, and the first
 //! that holds it answers. Which copy wins where a base and its patch both hold an id is the caller's choice
-//! (the Riders Republic notes find the patch's copy differing only in some LODSelectors' flags, TextureMapSpecs and a
-//! few others, and lead to "the patch wins"; that is not established from the game), so nothing here orders them.
+//! (the Riders Republic survey finds the patch's copy differing only in some LODSelectors' flags, TextureMapSpecs and a
+//! few others, and leads to "the patch wins"; that is not established from the game), so nothing here orders them.
 #![allow(
     clippy::disallowed_methods,
     clippy::disallowed_types,

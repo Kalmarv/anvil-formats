@@ -1,5 +1,5 @@
 //! Real LODSelectors read as stored (Riders Republic build 25394987, base WhiteRoom forge), every field against the
-//! bytes (games/riders-republic docs/recon/placement-darkroom-handoff.md, b8dae7b), every reference and dependency
+//! bytes, every reference and dependency
 //! resolving within the forge to a Mesh record.
 mod inputs;
 

@@ -3,7 +3,7 @@
 //! ([`dxcontainer::checksum`]) and the pack by its last 16 bytes; a container or pack whose digest disagrees is
 //! refused, naming it. What a container is to the engine (which material, pass or permutation uses it) isn't read.
 //!
-//! The Riders Republic notes (docs/terrain.md §3.4) found the 2,443 containers (SM5; resource definitions stripped);
+//! The Riders Republic survey found the 2,443 containers (SM5; resource definitions stripped);
 //! a census of this reader checks every digest.
 #![deny(
     clippy::arithmetic_side_effects,

@@ -1,7 +1,7 @@
 //! A Skeleton resource: the bone tree of a Riders Republic rig (the character kit's `MAD_CHR_Skel_*` and
 //! `MAD_CHR_SkelAddon_*` rigs and the animals', props' and bikes'), read as stored. Little-endian.
 //!
-//! The body (the registry's stream order, from docs/types.md "Skeleton" and checked on all 1,138 Skeletons of the
+//! The body (the registry's stream order, from the class registry and checked on all 1,138 Skeletons of the
 //! game): `01`; a u32 (`9C78EB24`, an enum: 0 to 8 and 14 occur); the bones, a u32 count and each an object (`00`, a
 //! u64 id, 0x95741049, the body below); the root (`4E1F230B`, a pointer to a bone: `03` none or `02` and a u64, a
 //! reference to a bone read before); the skeleton's own position (a f32 x 4, `F4D6F079`) and rotation (a f32 x 4,

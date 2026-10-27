@@ -6,7 +6,7 @@
 //! **A** is read by an H.264 CABAC arithmetic decoder (ITU-T H.264 9.3.3.2: a 9-bit range from 510 and an offset of
 //! A's bits 1 to 9, its bit 0 being 0 (the game loads a 33-bit value whose top bit must be clear; refused otherwise), the
 //! LPS range by `rangeTabLPS[state][(range >> 6) & 3]`, renormalised a bit at a time; its tables ITU-T H.264 Tables
-//! 9-44 and 9-45, as Cisco's openh264 gives them, equal to the Riders Republic notes' copy, which they compared with
+//! 9-44 and 9-45, as Cisco's openh264 gives them, equal to the Riders Republic survey's copy, which they compared with
 //! the game's), with 50 contexts each starting at state 0, MPS 0. Its bits run on past A into B, as the game's do; a
 //! read past the block's end is refused. **B** is read as a big-endian string of raw bits, from its first.
 //!
@@ -20,7 +20,7 @@
 //!   bits, the value (v + 1) / 2 for an odd v and -v / 2 for an even one; then summed: column 0 downward, row 0
 //!   rightward, every sample from the second row on plus the one above it (in index order), every row rightward.
 //!
-//! The coding is the Riders Republic notes' (docs/terrain.md §3.2, from their reading of the game's decoder),
+//! The coding is the Riders Republic survey's (from their reading of the game's decoder),
 //! measured on every node of MAD_USNAT by the census here (tests/tnl.rs): what it checks is stored or
 //! neighbouring values the decoding doesn't use, each B's length, each raster's palette and the node's mask, each
 //! node's stored height range, and the 4 samples every node shares with its neighbours.
@@ -510,7 +510,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_hilbert_walk_starts_as_the_notes_list() {
+    fn the_hilbert_walk_starts_as_the_survey_lists() {
         let h = hilbert();
         assert_eq!(h.len(), SAMPLES);
         assert_eq!(h.get(..8), Some(&[0, 1, 133, 132, 264, 396, 397, 265][..]));
@@ -522,7 +522,7 @@ mod tests {
 
     #[test]
     fn a_constant_raster_stub_decodes() {
-        // the notes' 41-byte stub for the value 0x2d: N = 15, A = 43 80 00 .., B = chunk 32768, one symbol
+        // the survey's 41-byte stub for the value 0x2d: N = 15, A = 43 80 00 .., B = chunk 32768, one symbol
         let mut b = vec![15, 0, 0, 0, 0x43, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         b.extend([0x00, 0x00, 0x80, 0x00, 0, 0, 0, 1, 0x2d]);
         b.extend([0; 9]);

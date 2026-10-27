@@ -1,5 +1,5 @@
-//! Every Skeleton of Riders Republic's forges (`installs.riders`) read to its last byte and counted as the notes'
-//! census counts them (docs/types.md "Skeleton": 1,138 consumed exactly), with this reader's own counts: the bones,
+//! Every Skeleton of Riders Republic's forges (`installs.riders`) read to its last byte and counted as the survey's
+//! census counts them (1,138 consumed exactly), with this reader's own counts: the bones,
 //! the pose groups, poses and pose bones, the IKData and Reflex3 constraints, and the bone tree's invariants (a parent
 //! and the root name bones of the skeleton, each bone's key low half its position, every rotation of unit length).
 mod inputs;

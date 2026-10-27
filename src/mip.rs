@@ -5,7 +5,7 @@
 //! (u32), the image, a zero byte, the parent TextureMap's class id (u64) and the mip level (u32), ending the body.
 //!
 //! Established on four CompiledMip resources (Riders Republic build 25394987: three level 0 mips, one level 1, images
-//! of 524,288 and 2,097,152 bytes; games/riders-republic docs/recon/compiled-mip-reader-request.md, f9925f0). Another
+//! of 524,288 and 2,097,152 bytes). Another
 //! flag or zero byte, or a body not ending exactly after the level, is refused, naming it.
 #![deny(
     clippy::arithmetic_side_effects,

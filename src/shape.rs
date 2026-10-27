@@ -11,9 +11,9 @@
 //!   column-major 4x4 matrices (each child's transform within the list), a u32 n and n vec4 (as stored; (1, 1, 1, 1) on
 //!   all but one), then a vec4 minimum and maximum (the children's box: stored, not checked against them).
 //!
-//! The grammars are the Riders Republic notes' (docs/collision.md: every entry of each type to its last byte; the
+//! The grammars are the Riders Republic survey's (every entry of each type to its last byte; the
 //! reference list's matrices column-major as ACExplorer's reader takes them, equal on all 3,731), consumed to the last
-//! byte by a census on every entry of the game. The notes read the vectors as
+//! byte by a census on every entry of the game. The survey reads the vectors as
 //! positions, lengths and transforms in their owner's local frame (each shape's box against the stored boxes of the
 //! lists and Entities holding it); what the reference list's vec4 array and the box's byte are isn't read.
 #![deny(

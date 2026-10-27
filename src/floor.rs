@@ -4,13 +4,13 @@
 //! `01 00 00 00`, an f32 (2.0 in MAD_USNAT, 0.0 in MAD_WhiteRoom's empty one: the cell side, 2 x 8192 = 16,384 the
 //! world's side), `00`; then (dx / 4) x (dy / 4) blocks of 8 bytes, row by row (a row along x), each a u16 `lo`, a
 //! u16 `hi` and a u32 of sixteen 2-bit indices, cell (r, c) of the block (r along y) at bits 2 (4 r + c); then 51
-//! bytes: a u32 0; an f32 (0.0618794, bits 0x3D7D7540: metres per word step, by the Riders Republic notes' fit of
+//! bytes: a u32 0; an f32 (0.0618794, bits 0x3D7D7540: metres per word step, by the Riders Republic survey's fit of
 //! 20,000 ground-snapped Entities, 0.06198, 0.16% from it); an f32 (338.86); an f32 origin x, y, z (-8192, -8192,
 //! -3584); a u32 0; a u32 dx and dy (8192, 8192); `01 01`, a u32 4, an f32 2.0, `01`, a u32 1.
 //!
-//! The grammar is the Riders Republic notes' (docs/terrain.md §2, with the header's f32 at 4, not 1), consumed
+//! The grammar is the Riders Republic survey's (with the header's f32 at 4, not 1), consumed
 //! exactly by both of the game's FloorHeightData (the blocks fill the body between header and trailer), and `lo` is
-//! at most `hi` in all 4,194,304 of MAD_USNAT's blocks. The cell order within a block is the notes' (block borders
+//! at most `hi` in all 4,194,304 of MAD_USNAT's blocks. The cell order within a block is the survey's (block borders
 //! continuous: a mean step of 14.25 words across them along x, 86.02 with each block's rows and columns swapped, over
 //! 2,397,037 border pairs of every 7th row; measured on the game's data), and a cell's place, x =
 //! origin x + cell side x column (y likewise by row), theirs against Entities (correlation 0.917 over 6,000; other
@@ -68,7 +68,7 @@ pub enum Error {
 /// The trailer's fields, as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Trailer {
-    /// Metres per word step (the notes' fit, to 0.16%).
+    /// Metres per word step (the survey's fit, to 0.16%).
     pub scale: f32,
     /// The f32 after it (338.86), unread.
     pub unknown: f32,

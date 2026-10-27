@@ -14,10 +14,10 @@
 //! the body, or `00`, a u64, GameStateData 0x7313743E, a u32, and two length-prefixed byte runs ending the body.
 //!
 //! An EntityGroup's body is an Entity's, then a u32 count c, c references to its members, a u32 count m, m links (as
-//! the DataLayerFilter's) and a u32 (the Riders Republic notes: docs/world.md §7, from the end on 48,755 of 48,803
+//! the DataLayerFilter's) and a u32 (the Riders Republic survey: from the end on 48,755 of 48,803
 //! USNAT groups; the census measures it read from the start). What a member or a link is to its group is not read.
 //!
-//! The grammar is from the Riders Republic placement notes (docs/entity-grammar.md, consumed to the last byte on 8 of
+//! The grammar is from the Riders Republic placement survey (consumed to the last byte on 8 of
 //! 8 fixtures and 97% of 5,200 sampled USNAT Entities); a census measures it on every
 //! Entity of the game. Fixed component sizes and the 125-byte Visual tail are observations on every body measured,
 //! not stored lengths.
@@ -38,13 +38,13 @@ pub const ENTITY_GROUP: u32 = 0x3F74_2D26;
 /// A Visual component's type.
 pub const VISUAL: u32 = 0xEC65_8D29;
 /// A component type read with a Visual's grammar (the AC schemas name it StaticDecalComponent: a tool claim; the Riders
-/// Republic notes measure the grammar on 614 bodies, 608 of them then read to their last byte).
+/// Republic survey measures the grammar on 614 bodies, 608 of them then read to their last byte).
 pub const STATIC_DECAL: u32 = 0x2F3A_7F6D;
 /// A RigidBodyComponent's type: the CRC-32 of its name.
 pub const RIGID_BODY: u32 = 0xC177_D702;
 /// Where in a RigidBodyComponent's body (after its type) the reference to its shape lies: a reference on every one of
 /// Riders Republic's, naming a MeshShape, SphereShape, ReferenceListShape, CapsuleShape or BoxShape (the census; the
-/// notes' collision placement, docs/skate-plan.md).
+/// survey's collision placement).
 const SHAPE_AT: usize = 748;
 /// A bounding volume's type.
 pub const BOUNDING_VOLUME: u32 = 0x4AEC_3476;
@@ -157,7 +157,7 @@ pub struct MeshInstance {
     pub instances: Vec<[f32; 16]>,
     pub bounds: BoundingVolume,
     /// The 16 bytes after them, as stored: an `InstanceShaderConstants` pointer (`03`), `IsFake`, `IsNearFake`,
-    /// `FakeMeshIndex` (u32) and the `CompiledMeshInstance` pointer's tag and id (registry-named-fields §9).
+    /// `FakeMeshIndex` (u32) and the `CompiledMeshInstance` pointer's tag and id (per the class registry).
     pub reserved: [u8; 16],
     /// The CompiledMeshInstance's 17 bytes after its type, as stored.
     pub compiled: [u8; 17],
@@ -169,7 +169,7 @@ pub struct MeshInstance {
 
 impl MeshInstance {
     /// `IsFake`: set on exactly the 1,031 `MAD_USNAT_FarFake_<n>_Cell` Entities of Riders Republic, the far terrain's
-    /// cells (docs/placement.md §19.4).
+    /// cells.
     pub fn is_fake(&self) -> bool {
         self.reserved[1] != 0
     }
@@ -234,7 +234,7 @@ pub struct Visual {
 
 /// A GrassVisual component as stored: the Visual's head and the model's Mesh, the GrassVisualInstance (a MeshInstanceData
 /// with no instance matrices on all 46 of Riders Republic's) with the u16 array it stores, the Visual's tail and the
-/// model's number. The grass instances themselves are not stored here (docs/grass.md: the engine creates them at run
+/// model's number. The grass instances themselves are not stored here (the engine creates them at run
 /// time).
 #[derive(Clone, Debug, PartialEq)]
 pub struct GrassVisual {
@@ -273,7 +273,7 @@ pub struct GrassSetup {
     pub settings_id: u64,
     /// Its body as stored: WorldExtent, WorldMinZ and WorldMaxZ (u32), the WorldBoundingBox (a BoundingVolume), then
     /// `GrassVisibilityDistance` (a u16), 16 f32, four tables of 16 u16 (the LOD start distances by model class)
-    /// and the run of floats and bytes the notes did not assign to field names (docs/grass.md §2.1).
+    /// and the run of floats and bytes the survey did not assign to field names.
     pub settings: Vec<u8>,
     /// ManagedEntities: the GrassVisual Entities' ids, in order (a model's number is its position).
     pub entities: Vec<u64>,
@@ -329,7 +329,7 @@ pub struct AnimBinding {
 /// A component: its id, type and body.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Component {
-    /// Its header's tag: 04, or 00 (the notes: in UI groups and Trigger_Discovery groups; what it means is not
+    /// Its header's tag: 04, or 00 (the survey: in UI groups and Trigger_Discovery groups; what it means is not
     /// established).
     pub tag: u8,
     pub id: u64,
@@ -342,7 +342,7 @@ pub struct Component {
 pub enum ComponentBody {
     Visual(Visual),
     /// A StaticDecalComponent: a Visual's grammar, its object decal geometry made for this one placement (the Riders
-    /// Republic notes: on every CITYSCHOOL wall a LODSelector named for the Entity's own StaticDecalComponent).
+    /// Republic survey: on every CITYSCHOOL wall a LODSelector named for the Entity's own StaticDecalComponent).
     StaticDecal(Visual),
     /// A RigidBodyComponent: its bytes as stored, and the shape the reference at its offset 748 names.
     RigidBody {
@@ -400,7 +400,7 @@ pub mod query {
     pub const TERRAIN_LOD0: u32 = 25;
 }
 
-/// A RigidBody's `CollisionFilterInfo` as the game's registry names it (registry-named-fields §9, §10): its
+/// A RigidBody's `CollisionFilterInfo` as the game's registry names it (per the class registry): its
 /// `QueryFlags` (a `QueryLayerBits`: 34 bit fields, each stored as a u64 0 or 1, from the RigidBodyComponent's offset
 /// 68) and its two `CollisionLayerBits` (24 each, from 352 and 556), as bit masks by slot, and its `IsGround` (797).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -560,7 +560,7 @@ impl std::ops::DerefMut for Cursor<'_> {
 impl Cursor<'_> {
     /// A GameplayContextDisabler's condition node (04, a u64, its type): an operator (0x025AD7F9: a byte, an op
     /// 0, 1 or 2, a count n, n child nodes) or a leaf (0x0FA689EF: 2 bytes, a u64). False where its type is neither
-    /// or it nests deeper than the notes saw (2).
+    /// or it nests deeper than the survey saw (2).
     fn condition(&mut self, depth: usize) -> Result<bool, Error> {
         expect(self, "condition node", 4, 1)?;
         self.u64(LE).field("condition node")?;
@@ -1009,14 +1009,14 @@ impl Cursor<'_> {
                 }
                 self.take(46).field("HoudiniDecalInstancerComponent")?;
             }
-            // StartingGridComponent: 4 bytes, a count n, n 78-byte objects (GameplayPositionWithLocal: the notes'
+            // StartingGridComponent: 4 bytes, a count n, n 78-byte objects (GameplayPositionWithLocal: the survey's
             // 8 + 78 n on 1,362 of 1,362)
             0x1725_EC54 => {
                 self.take(4).field("component")?;
                 let n = count(self, "component count", 78)?;
                 self.take(n.saturating_mul(78)).field("component")?;
             }
-            // QuestInteractiveComponent: 89 bytes, a null handle 03, an EventListener's 13 bytes (the notes: 532 of 532; a 120-byte form with
+            // QuestInteractiveComponent: 89 bytes, a null handle 03, an EventListener's 13 bytes (the survey: 532 of 532; a 120-byte form with
             // another byte there is seen 4 times, without a rule)
             0x733E_6F5A => {
                 self.take(89).field("component")?;
@@ -1025,13 +1025,13 @@ impl Cursor<'_> {
                 }
                 self.take(13).field("component")?;
             }
-            // UICheckpointController: 51 bytes (the notes: the next component's header exactly there on 18,259 of
+            // UICheckpointController: 51 bytes (the survey: the next component's header exactly there on 18,259 of
             // 18,259)
             0x4CB6_2343 => {
                 self.take(51).field("UICheckpointController")?;
             }
             // CheckpointComponent: 4 bytes, a count k, k inline objects (00, a u64, a type, its body), 226 bytes; each
-            // object's size by its type, observed on every body measured (the notes: 18,085 of 18,395 groups holding
+            // object's size by its type, observed on every body measured (the survey: 18,085 of 18,395 groups holding
             // it then parse to their end); a type outside the table has no rule
             0x69D5_E169 => {
                 self.take(4).field("CheckpointComponent")?;
@@ -1062,7 +1062,7 @@ impl Cursor<'_> {
             // FakeWaterMeshComponent: 4 bytes, a reference (its FakeWaterComponentChunk), a FakeWaterMeshInstance
             // (00, an object, a count k and 64 k bytes), a bounding volume, 10 bytes, the 125-byte Visual tail, 3 vec4,
             // a u32, a vertex count V, a u32, V 8-byte vertices (4 f16), an index count I, a u32, I u16 indices (the
-            // notes: 274 + 8 V + 2 I, the one sequential end on 512 of 512)
+            // survey: 274 + 8 V + 2 I, the one sequential end on 512 of 512)
             0x961F_3B5D => {
                 self.take(14).field("FakeWaterMeshComponent")?;
                 expect(self, "FakeWaterMeshInstance", 0, 1)?;
@@ -1081,7 +1081,7 @@ impl Cursor<'_> {
                     .field("FakeWaterMeshComponent indices")?;
             }
             // AutoFakeOrchestratorComponent: 4 bytes, n SubMeshFakeIndexSpans (an object, a count m, m FakeIndexSpans
-            // of an object and two u32), a count p and 8 p bytes, 9 bytes (the notes: the one sequential end on 4,052
+            // of an object and two u32), a count p and 8 p bytes, 9 bytes (the survey: the one sequential end on 4,052
             // of 4,052)
             0xD4B4_4556 => {
                 self.take(4).field("AutoFakeOrchestratorComponent")?;
@@ -1100,7 +1100,7 @@ impl Cursor<'_> {
                 self.take(9).field("AutoFakeOrchestratorComponent")?;
             }
             // DominoComponent: 4 bytes, a u32, an AIScriptInstance (00, an object), 2 bytes, a reference (its script),
-            // a count n, n parameters, 21 bytes (the notes: 2,384 of 2,626 bodies end there); a parameter's value by its
+            // a count n, n parameters, 21 bytes (the survey: 2,384 of 2,626 bodies end there); a parameter's value by its
             // kind (W's low byte), a value kind or embedded class outside the rule has none
             0xBE71_1F06 => {
                 self.take(8).field("DominoComponent")?;
@@ -1157,7 +1157,7 @@ impl Cursor<'_> {
             }
             // WaterComponent: 4 bytes, a reference (its WaterMesh), a WaterMeshInstance (00, an object, a count k and
             // 64 k bytes), a bounding volume, 10 bytes, the 125-byte Visual tail, a RiverQuadTree (an object, 2 vec4, a
-            // byte, n 61-byte nodes), a byte, m 49-byte WaterPatchDescs, 3 references (the notes: 290 + 61 n + 49 m, the
+            // byte, n 61-byte nodes), a byte, m 49-byte WaterPatchDescs, 3 references (the survey: 290 + 61 n + 49 m, the
             // one sequential end on 36 of 36)
             0x996D_F94F => {
                 self.take(14).field("WaterComponent")?;
@@ -1175,7 +1175,7 @@ impl Cursor<'_> {
                 self.take(m.saturating_mul(49)).field("WaterPatchDesc")?;
                 self.take(30).field("WaterComponent")?;
             }
-            // AnimatedEntityComponent: 4 bytes, a count n, n 66-byte AnimationParameters, a byte (the notes: 9 + 66 n,
+            // AnimatedEntityComponent: 4 bytes, a count n, n 66-byte AnimationParameters, a byte (the survey: 9 + 66 n,
             // the one sequential end or the next component's header on 2,041 of 2,041)
             0x2996_CA50 => {
                 self.take(4).field("AnimatedEntityComponent")?;
@@ -1184,7 +1184,7 @@ impl Cursor<'_> {
                 self.take(1).field("AnimatedEntityComponent")?;
             }
             // 0xE139F584 (unnamed): 4 bytes, an EventListener (an object, a byte, a count n: only 0 read, 13 bytes), a
-            // flag byte, k ids (01, a u64), 9 bytes, a SoundInstance (00, an object, 52 bytes) (the notes: 113 + 9 k,
+            // flag byte, k ids (01, a u64), 9 bytes, a SoundInstance (00, an object, 52 bytes) (the survey: 113 + 9 k,
             // the one sequential end or the next component's header on 1,990 of 2,014; the rest hold objects in the
             // EventListener, without a rule)
             0xE139_F584 => {
@@ -1205,7 +1205,7 @@ impl Cursor<'_> {
             // BulkComponent (crowds): 4 bytes, BulkSettings (an object, a u32), a BulkRandomCompositionTemplate (00, an
             // object, an f32), t 36-byte BulkTemplates, a u32, an f32, c 45-byte members, 4 bytes, a 04-tagged object
             // and a byte, k BulkStates (an object, 9 bytes, a reference), 37 bytes, k SoundInstances (an object, 52
-            // bytes), f f32, 17 bytes (the notes: the one sequential end on 2,481 of 2,481)
+            // bytes), f f32, 17 bytes (the survey: the one sequential end on 2,481 of 2,481)
             0x3083_58A4 => {
                 self.take(4).field("BulkComponent")?;
                 object(self, "BulkSettings", 0x4404_F7CC)?;
@@ -1247,7 +1247,7 @@ impl Cursor<'_> {
             }
             // FXComponent: 4 bytes, an object, 6 bytes, a reference (its FX), an f32, an object, a u32, n parameters
             // (a u32 id, a u32, a u16, a u16 kind, a u32, the value by its kind: 0x0A an f32, 0x0D a vec4; another
-            // kind has no rule), 11 bytes (the notes: 67 + the parameters', the one sequential end or the next
+            // kind has no rule), 11 bytes (the survey: 67 + the parameters', the one sequential end or the next
             // component's header on every one of the 1,089 bodies reached)
             0xD2BF_93A6 => {
                 self.take(4).field("FXComponent")?;
@@ -1269,7 +1269,7 @@ impl Cursor<'_> {
                 self.take(11).field("FXComponent")?;
             }
             // 0x341877D6 (unnamed): 4 bytes, a count n, n 109-byte items, each from a 04-tagged 0x30C186C4 object (the
-            // notes: 8 + 109 n, the one sequential end on 190 of 190; the rest of an item, 0x518AFC74 and IsLocked
+            // survey: 8 + 109 n, the one sequential end on 190 of 190; the rest of an item, 0x518AFC74 and IsLocked
             // objects with references, not named)
             0x3418_77D6 => {
                 self.take(4).field("component")?;
@@ -1280,12 +1280,12 @@ impl Cursor<'_> {
                     self.take(96).field("component item")?;
                 }
             }
-            // 0xEEF3F11F (unnamed): 9 bytes (the notes: 00 01 00 00, a u32 0, 03 on 483 of 483)
+            // 0xEEF3F11F (unnamed): 9 bytes (the survey: 00 01 00 00, a u32 0, 03 on 483 of 483)
             0xEEF3_F11F => {
                 self.take(9).field("component")?;
             }
             // BreakableComponent: 4 bytes, a u32 (only 0 read), k ids (01, a u64), m ids, a 102-byte audio blocks (an
-            // AudioEventSeed object first: 00, a u64, 0x561E06FC), 20 bytes (the notes: k 3, m 1, a 1 on all 1,070,
+            // AudioEventSeed object first: 00, a u64, 0x561E06FC), 20 bytes (the survey: k 3, m 1, a 1 on all 1,070,
             // 178 bytes, the next component's header there on 1,070 of 1,070; other counts read as counts, not seen)
             0x44F8_FD99 => {
                 self.take(4).field("BreakableComponent")?;
@@ -1307,7 +1307,7 @@ impl Cursor<'_> {
                 }
                 self.take(20).field("BreakableComponent")?;
             }
-            // GameplayContextDisablerComponent: 4 bytes, a condition tree, m (a byte 00 or 01, a u64) (the notes: the
+            // GameplayContextDisablerComponent: 4 bytes, a condition tree, m (a byte 00 or 01, a u64) (the survey: the
             // one sequential end on 99 of 99 measured, the next component's header on the other 2,216 of 2,315)
             0xBB7F_5B1D => {
                 self.take(4).field("GameplayContextDisablerComponent")?;
@@ -1331,7 +1331,7 @@ impl Cursor<'_> {
                     self.u64(LE).field(what)?;
                 }
             }
-            // OutOfBoundsVisualComponent (the notes: 169 on 716 of 716)
+            // OutOfBoundsVisualComponent (the survey: 169 on 716 of 716)
             0x2994_1A30 => {
                 self.take(169).field("component")?;
             }
@@ -1391,7 +1391,7 @@ impl StoredEntity {
         Ok(e)
     }
 
-    /// The StaticDecalComponents' Visuals: each a LODSelector made for its one placement (docs/entity-grammar.md §9.1).
+    /// The StaticDecalComponents' Visuals: each a LODSelector made for its one placement.
     pub fn decals(&self) -> impl Iterator<Item = &Visual> {
         self.components.iter().filter_map(|c| match &c.body {
             ComponentBody::StaticDecal(v) => Some(v),
@@ -1415,8 +1415,7 @@ impl StoredEntity {
         })
     }
 
-    /// Its run's bool at `at` (the registry's Entity bit-field group in order: docs/placement.md §19, entity-grammar
-    /// §8.26) set.
+    /// Its run's bool at `at` (the registry's Entity bit-field group, in order) set.
     fn run_bool(&self, at: usize) -> bool {
         self.run.get(at).is_some_and(|&b| b != 0)
     }
@@ -1425,7 +1424,7 @@ impl StoredEntity {
         self.run_bool(2)
     }
     /// `IsPhantom`: its run's byte 3 (on 3,834 Entities of Riders Republic, every one a UI or HUD widget, a
-    /// checkpoint letter, a collectible balloon or an editor helper: docs/placement.md §19.1).
+    /// checkpoint letter, a collectible balloon or an editor helper).
     pub fn is_phantom(&self) -> bool {
         self.run_bool(3)
     }

@@ -1,4 +1,4 @@
-//! Event look presets (lighting.md §4). Decode stored values; the second preset scalar and forecast lane roles
+//! Event look presets. Decode stored values; the second preset scalar and forecast lane roles
 //! are not proven sun/wind/fog inputs. Their names alone don't say how a renderer applies them.
 #![deny(
     clippy::arithmetic_side_effects,

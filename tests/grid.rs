@@ -1,6 +1,6 @@
 //! Real grids (Riders Republic build 25394987): the Worlds' GridDescriptions with the stated u16 run (5 in a base
-//! forge, 4 in its patch), their GridPartitions and cells, and the blocks they name, as the Riders Republic notes give
-//! them (docs/placement.md §10, docs/world.md §1).
+//! forge, 4 in its patch), their GridPartitions and cells, and the blocks they name, as the Riders Republic survey gives
+//! them.
 mod inputs;
 
 use anvil_formats::archive::{Archive, At};

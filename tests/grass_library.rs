@@ -1,4 +1,4 @@
-//! A GrassPatternLibrary body built by hand in the layout of Riders Republic's (docs/grass.md §2.2): one model, a group
+//! A GrassPatternLibrary body built by hand in the layout of Riders Republic's: one model, a group
 //! with one rule, an empty group and the 443-byte tail.
 use anvil_formats::grass::StoredGrassLibrary;
 

@@ -13,8 +13,7 @@
 //!
 //! Established on two LODSelectors of the base WhiteRoom forge (Riders Republic build 25394987: entries 24 and 159,
 //! one direct reference and none, two direct references and two dependencies; every byte consumed to the body's end,
-//! and every reference and dependency resolving to a Mesh record; games/riders-republic
-//! docs/recon/placement-darkroom-handoff.md, b8dae7b). Refused, naming it: another first byte or level marker, a
+//! and every reference and dependency resolving to a Mesh record). Refused, naming it: another first byte or level marker, a
 //! reference [`crate::reference`] refuses, a dependency byte other than 0, a second count other than d, or
 //! bytes after the last 6. A level's count at +43 counts u32s kept as stored before its last byte (48 + 4n bytes):
 //! every LODSelector of Riders Republic (48,862) reads so to its body's end in the census; RRAssetStudio reads the same.
@@ -59,7 +58,7 @@ pub struct StoredLevel {
     pub head: u64,
     pub reference: Option<Reference>,
     /// The three f32 after the reference, as stored: `SwitchDistance`, `TransitionZoneSize` and
-    /// `FadeTimeMultiplier` (registry-named-fields §2).
+    /// `FadeTimeMultiplier`.
     pub floats: [f32; 3],
     /// The 5 bytes after them.
     pub bytes_34: [u8; 5],

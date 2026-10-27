@@ -1,5 +1,5 @@
-//! LayeredSky's authored scattering keyframes. The two resource profiles are from the registry-based read in
-//! riders-republic/docs/sky.md §2; unknown profiles fail rather than using guessed offsets.
+//! LayeredSky's authored scattering keyframes. The two resource profiles are from the registry-based read of
+//! the Riders Republic survey; unknown profiles fail rather than using guessed offsets.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
@@ -208,7 +208,7 @@ fn half(bits: u16) -> f32 {
 }
 
 impl SkyKeyframe {
-    /// Static clear-sky slice of the stored single-scattering model (sky.md §6). Caller supplies the sun and Mie
+    /// Static clear-sky slice of the stored single-scattering model. Caller supplies the sun and Mie
     /// values; the weather/time controllers, clouds, moon, Milky Way, exposure and stars are separate engine inputs.
     #[allow(
         clippy::arithmetic_side_effects,

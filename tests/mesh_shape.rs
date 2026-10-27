@@ -241,7 +241,7 @@ fn inconsistent_geometry_is_refused() {
 }
 
 /// The two real shapes' geometry (Riders Republic build 25394987; counts and boundary hand-checked in a separate
-/// read-only decode, games/riders-republic docs/recon/collision-geometry.md, 39c645b).
+/// read-only decode).
 #[test]
 fn two_real_shapes_read_their_geometry() {
     let Some(path) = install_file(Game::Riders, "DataPC_MAD_USNAT.forge") else {

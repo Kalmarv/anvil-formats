@@ -1,8 +1,8 @@
 //! The grass library: a GrassPatternLibrary's models (one settings record each) and its groups of rules. What it
 //! stores is read as stored; what the engine does with it (where plants grow and how many) is not stored in any forge
-//! resource: the engine makes the instances at run time (docs/grass.md §0, §5).
+//! resource: the engine makes the instances at run time.
 //!
-//! The body (docs/grass.md §2.2, docs/vegetation.md §3.1; consumed to the last byte on the one library of Riders
+//! The body (consumed to the last byte on the one library of Riders
 //! Republic, 30,247 bytes): `01`, a u32 model count n, `00`, then n times a GrassModel's settings object (a u64, 0xDDB820C0
 //! and a 60-byte body) and a BoundingVolume object (a u64, 0x4AEC3476, six f32 and 24 bytes); a u32 0; the groups, each a
 //! GrassPattern object (a u64, 0xBDD96F63, a u32 rule count r, `00`) and r GrassPatternElements (a u64, 0xA6FC073D and 82
@@ -16,7 +16,7 @@
 use crate::fields::{BodyError, LE, body_error, count, expect, object};
 use primase_foundations::bytes::{Cursor, Field};
 
-/// A GrassModel's settings, as the registry's class stores them (docs/grass.md §2.2): the six f32, the bytes and the
+/// A GrassModel's settings, as the registry's class stores them): the six f32, the bytes and the
 /// enum, the imposter shader levels, and the 23 bytes after them that the class list doesn't name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GrassModelSettings {
@@ -35,7 +35,7 @@ pub struct GrassModelSettings {
     pub imposter_lookat_ratio: f32,
     /// The 23 bytes that follow, as stored: a LOD table of 5 bytes (`00 01 02 03 03`), four f32 and 2 bytes.
     pub unnamed: [u8; 23],
-    /// The four f32 of `unnamed`: the model's LOD switch distances in metres by the notes' reading by value: (0, 10, 20,
+    /// The four f32 of `unnamed`: the model's LOD switch distances in metres by the survey's reading by value: (0, 10, 20,
     /// 40) on 26 models, (0, 5, 10, 20) on 16 and (0, 20, 40, 80) on 4 (counted over the 46 models).
     pub switch_distances: [f32; 4],
 }
@@ -93,7 +93,7 @@ pub struct StoredGrassRule {
 }
 
 /// The four f32 after the LOD table in a model's 23 unnamed bytes (at 5, 9, 13 and 17): its LOD switch distances in
-/// metres, by the notes' reading by value.
+/// metres, by the survey's reading by value.
 fn switch_distances(unnamed: &[u8; 23]) -> [f32; 4] {
     [5usize, 9, 13, 17].map(|at| {
         unnamed

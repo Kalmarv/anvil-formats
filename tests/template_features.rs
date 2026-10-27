@@ -1,6 +1,6 @@
 //! A template's feature flags (`template::feature_node`, the body of its shader-state node) against the
 //! ShaderKeys it stores, on all 432 MaterialTemplates of the six forges (Riders Republic build 25394987): the
-//! engine's key composer (docs/shaders.md §6.2) sets a key bit only where the template's feature word `T` allows it,
+//! engine's key composer sets a key bit only where the template's feature word `T` allows it,
 //! and a template stores the permutations its flags can reach, so the byte of feature n (byte n + 1 of the node)
 //! is set exactly where a stored key has the bit it gates:
 //! - features 3 and 4 and bit `0x10` (both set), feature 3 and `0x400`/`0x800`, feature 4 and `0x200`;

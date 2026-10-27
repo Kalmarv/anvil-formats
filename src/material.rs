@@ -6,9 +6,9 @@
 //! count of references is stored before them, and the rest may hold more: two are what is established.
 //!
 //! Established on three Materials and a TextureSet (Riders Republic build 25394987, base WhiteRoom forge, entries 26,
-//! 210, 162 and 163; games/riders-republic docs/recon/material-reference-envelope.md, e244d10). There, a Material's
+//! 210, 162 and 163). There, a Material's
 //! second reference resolves to a TextureSet in all three and its first to a MaterialTemplate (210's in the same forge;
-//! 26's and 162's in DataPC.forge, games/riders-republic docs/recon/material-reference-targets.md, aa2337c); the
+//! 26's and 162's in DataPC.forge); the
 //! TextureSet's two resolve to TextureMaps. Another first byte, a reference
 //! [`crate::reference`] refuses, or a body shorter than the two references, is refused, naming it.
 #![deny(
@@ -23,8 +23,7 @@ use crate::reference::{self, Reference};
 use primase_foundations::bytes::{Cursor, Field, FieldError};
 
 /// A Material's flags as stored: body 41 to 84 (of the 102 bytes after its references, 20 to 63), the fields the
-/// engine's Material deserialiser reads there in its order, named by its class registry (Riders Republic
-/// docs/shaders.md §6): `BlendMode` (a u32, of which the engine keeps 4 bits), `AlphaDisplayMode` (a u32, 2 bits),
+/// engine's Material deserialiser reads there in its order, named by its class registry (Riders Republic): `BlendMode` (a u32, of which the engine keeps 4 bits), `AlphaDisplayMode` (a u32, 2 bits),
 /// `AlphaTestValue` and 35 booleans, a byte each.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaterialFlags {

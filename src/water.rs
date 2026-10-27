@@ -1,13 +1,13 @@
 //! A WaterComponent's lake data: the water patches a lake's surface is made of and the atlases its shader samples.
 //! Little-endian; a reference is [`crate::reference`]'s.
 //!
-//! The body (docs/entity-grammar.md §8.11, docs/material-spec.md §24.3; its length rule in [`crate::entity`]):
+//! The body (its length rule in [`crate::entity`]):
 //! 4 bytes; a reference (its WaterMesh); a WaterMeshInstance (`00`, an object `0xC15B678F`, a count k and k 64-byte
 //! items); a bounding volume (40 bytes), 10 bytes, the 125-byte Visual tail; a RiverQuadTree (an object `0x92DB01AE`,
 //! 33 bytes, a count n and n 61-byte nodes); a byte; a count m and m 49-byte WaterPatchDescs; three references (the
 //! atlases). A WaterPatchDesc: `00`, a u64 and a u32 type; its position (3 f32: x and y in metres, z the water
 //! level) at 13; 4 bytes at 25; its rectangle in the atlases (4 f32: u0, v0, u1, v1) at 29; its level (a u32) at 45:
-//! a square of side `512 >> level` metres from its position (the notes: 2,062 patches of the 35 lakes, levels 3 to
+//! a square of side `512 >> level` metres from its position (the survey: 2,062 patches of the 35 lakes, levels 3 to
 //! 6). The three references are the Flow, Params and LocalProfile atlases, in that order (by their entries' names).
 #![deny(
     clippy::arithmetic_side_effects,
@@ -27,7 +27,7 @@ pub struct WaterPatch {
     pub kind: u32,
     /// x and y in metres, z the water level.
     pub position: [f32; 3],
-    /// The 4 bytes at 25, as stored (`00 00 01 02` on the notes' samples).
+    /// The 4 bytes at 25, as stored (`00 00 01 02` on the survey's samples).
     pub unread: [u8; 4],
     /// u0, v0, u1, v1 in the atlases.
     pub rect: [f32; 4],
@@ -57,7 +57,7 @@ body_error!(Error, Error::Body);
 pub struct StoredWater {
     /// Its WaterMesh.
     pub mesh: Option<Reference>,
-    /// The byte before the patches (1 on the notes' lakes), as stored.
+    /// The byte before the patches (1 on the survey's lakes), as stored.
     pub byte: u8,
     pub patches: Vec<WaterPatch>,
     /// Flow, Params and LocalProfile.
