@@ -119,7 +119,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 [[package]]
 name = "dxcontainer"
 version = "0.1.0"
-source = "git+https://github.com/Kalmarv/dx?rev=cfb08239b8bb177d65a44cdd182cbfebd942dd93#cfb08239b8bb177d65a44cdd182cbfebd942dd93"
+source = "git+https://github.com/Kalmarv/dx?rev=ab07f2b27e9f154508c4502ac8b61134b7e34b08#ab07f2b27e9f154508c4502ac8b61134b7e34b08"
 dependencies = [
  "primase-foundations",
  "thiserror",
@@ -379,7 +379,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 [[package]]
 name = "primase-foundations"
 version = "0.1.0"
-source = "git+https://github.com/Kalmarv/primase-foundations?rev=8dd2fb8caa84eb22b6998655550f1cf288ca6b93#8dd2fb8caa84eb22b6998655550f1cf288ca6b93"
+source = "git+https://github.com/Kalmarv/primase-foundations?rev=dc4369b73343f3e0d81adc47f2e504027efc1d5a#dc4369b73343f3e0d81adc47f2e504027efc1d5a"
 dependencies = [
  "flate2",
  "half",
@@ -406,7 +406,7 @@ dependencies = [
 [[package]]
 name = "primase-testdata"
 version = "0.1.0"
-source = "git+https://github.com/Kalmarv/primase-testdata?rev=3d70d5ce04d0335b41d359fbfc7d6d5a714b581d#3d70d5ce04d0335b41d359fbfc7d6d5a714b581d"
+source = "git+https://github.com/Kalmarv/primase-testdata?rev=d0258530ca9ca0ca74e957716ae8683e7facc8a7#d0258530ca9ca0ca74e957716ae8683e7facc8a7"
 dependencies = [
  "serde_json",
  "thiserror",
