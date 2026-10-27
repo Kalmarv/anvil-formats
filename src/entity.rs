@@ -78,23 +78,42 @@ const GRASS_SETTINGS: u32 = 0x3BE0_5B93;
 /// Why an Entity body can't be read.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    /// The body is short, has a changed fixed value, or fails a check; the inner error names the field and offset.
     #[error("Entity {0}")]
     Body(#[from] BodyError),
+    /// A component's type has no length rule, and the Entity's component headers cannot delimit it.
     #[error("Entity component {index}: type {kind:08X} has no length rule")]
-    Component { index: usize, kind: u32 },
+    Component {
+        /// The component's position.
+        index: usize,
+        /// The component's type id.
+        kind: u32,
+    },
+    /// A component's type has no length rule and the Entity's tail was not found after it.
     #[error(
         "Entity component {index}: type {kind:08X} has no length rule and the tail is not found after it"
     )]
-    NoTail { index: usize, kind: u32 },
+    NoTail {
+        /// The component's position.
+        index: usize,
+        /// The component's type id.
+        kind: u32,
+    },
+    /// A component whose type has no length rule is followed by a different number of component headers than the Entity's count says.
     #[error(
         "Entity component {index}: type {kind:08X} has no length rule and {found} component headers follow, the count says {want}"
     )]
     Headers {
+        /// The component's position.
         index: usize,
+        /// The component's type id.
         kind: u32,
+        /// How many component headers were found after it.
         found: usize,
+        /// How many the Entity's count of components calls for.
         want: usize,
     },
+    /// A Visual's instance data has a type this reader does not read; the value is that type id.
     #[error("Entity Visual: instance data type {0:08X} isn't read")]
     Instance(u32),
 }
@@ -127,7 +146,12 @@ pub enum Refusal {
     Rule(Error),
     /// The rule read to `at`, not to the extent's `end`.
     #[error("its rule ends at {at}, not at the extent's end {end}")]
-    Ends { at: usize, end: usize },
+    Ends {
+        /// Where the rule stopped reading.
+        at: usize,
+        /// Where the extent ends.
+        end: usize,
+    },
 }
 
 impl Refusal {
@@ -143,18 +167,24 @@ impl Refusal {
 /// A bounding volume as stored: its id, two corners and a u32.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoundingVolume {
+    /// The BoundingVolume object's id.
     pub id: u64,
+    /// The minimum corner (three f32).
     pub min: [f32; 3],
+    /// The maximum corner (three f32).
     pub max: [f32; 3],
+    /// The u32 after the corners, as stored.
     pub word: u32,
 }
 
 /// A MeshInstanceData as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MeshInstance {
+    /// The MeshInstanceData object's id.
     pub id: u64,
     /// Its instance matrices, column-major (none: placed once by its owner).
     pub instances: Vec<[f32; 16]>,
+    /// The bounds of the whole instance data.
     pub bounds: BoundingVolume,
     /// The 16 bytes after them, as stored: an `InstanceShaderConstants` pointer (`03`), `IsFake`, `IsNearFake`,
     /// `FakeMeshIndex` (u32) and the `CompiledMeshInstance` pointer's tag and id (per the class registry).
@@ -187,8 +217,11 @@ impl MeshInstance {
 /// An ImpostorInstanceData as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImpostorInstance {
+    /// The ImpostorInstanceData object's id.
     pub id: u64,
+    /// The instance matrices, column-major.
     pub instances: Vec<[f32; 16]>,
+    /// The bounds of the whole instance data.
     pub bounds: BoundingVolume,
     /// Its 10-byte reference as stored (lead `03 00`, then an Impostor's ClassID).
     pub reference: [u8; 10],
@@ -197,8 +230,11 @@ pub struct ImpostorInstance {
 /// One of a LODSelectorInstance's five slots.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Slot {
+    /// No instance in this slot (stored as the null pointer).
     None,
+    /// A MeshInstanceData.
     Mesh(MeshInstance),
+    /// An ImpostorInstanceData.
     Impostor(ImpostorInstance),
 }
 
@@ -207,16 +243,28 @@ pub enum Slot {
 pub enum Instance {
     /// A LODSelectorInstance: matrices, bounds, its LODSelector reference as stored and five slots.
     Lod {
+        /// The LODSelectorInstance object's id.
         id: u64,
+        /// The instance matrices, column-major.
         instances: Vec<[f32; 16]>,
+        /// The bounds of the whole instance.
         bounds: BoundingVolume,
+        /// The 10-byte LODSelector reference, as stored.
         selector: [u8; 10],
+        /// The five slots, in stored order.
         slots: Vec<Slot>,
     },
     /// A MeshInstanceData directly.
     Mesh(MeshInstance),
     /// Kept as stored (a LightInstance's 311 bytes, the tail within; a SplashFXInstanceData's).
-    Raw { kind: u32, id: u64, bytes: Vec<u8> },
+    Raw {
+        /// The instance data's type id.
+        kind: u32,
+        /// Its object id.
+        id: u64,
+        /// Its bytes after the header, as stored.
+        bytes: Vec<u8>,
+    },
     /// None: the instance tag `03` (null), as a StaticDecalComponent with no object holds.
     None,
 }
@@ -224,9 +272,11 @@ pub enum Instance {
 /// A Visual component as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Visual {
+    /// The 4 bytes before the object reference, as stored.
     pub head: [u8; 4],
     /// What it shows: a LODSelector on most, a Mesh directly on some.
     pub object: Option<Reference>,
+    /// What the Visual instantiates.
     pub instance: Instance,
     /// Its 125-byte tail, as stored (none where the instance data holds it).
     pub tail: Vec<u8>,
@@ -238,11 +288,13 @@ pub struct Visual {
 /// time).
 #[derive(Clone, Debug, PartialEq)]
 pub struct GrassVisual {
+    /// The 4 bytes before the model's Mesh reference, as stored.
     pub head: [u8; 4],
     /// The model's Mesh (a Mesh directly, not a LODSelector).
     pub object: Option<Reference>,
     /// The GrassVisualInstance's id.
     pub id: u64,
+    /// The GrassVisualInstance's MeshInstanceData fields.
     pub instance: MeshInstance,
     /// The GrassVisualInstance's u16 array: 0 to 2 (or 3) after four times the model's number on the 46 models (read
     /// by the registry as an array of u16; the Mesh's ranges by value).
@@ -259,13 +311,18 @@ pub struct GrassVisual {
 /// registry's field names, so it has no length rule: see [`StoredEntity::parse`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct GrassSetup {
+    /// The 4 bytes before the object reference, as stored.
     pub head: [u8; 4],
+    /// The reference the Visual part names, or `None` if stored as the empty form.
     pub object: Option<Reference>,
+    /// The GrassInstance's id.
     pub id: u64,
+    /// The GrassInstance's MeshInstanceData fields.
     pub instance: MeshInstance,
     /// The bytes between the MeshInstanceData's fields and the Visual tail, as stored (none on both copies: the
     /// GrassInstance stores nothing there).
     pub instance_extra: Vec<u8>,
+    /// The Visual's 125-byte tail, as stored.
     pub tail: Vec<u8>,
     /// `GrassPatternLibraryReference`: the library (a GrassPatternLibrary).
     pub library: Option<Reference>,
@@ -332,21 +389,27 @@ pub struct Component {
     /// Its header's tag: 04, or 00 (the survey: in UI groups and Trigger_Discovery groups; what it means is not
     /// established).
     pub tag: u8,
+    /// Its header's u64 id.
     pub id: u64,
+    /// Its header's type id, the CRC-32 of its class name.
     pub kind: u32,
+    /// Its body, read as far as this crate has a rule for the type.
     pub body: ComponentBody,
 }
 
 /// A component's body.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ComponentBody {
+    /// A VisualComponent.
     Visual(Visual),
     /// A StaticDecalComponent: a Visual's grammar, its object decal geometry made for this one placement (the Riders
     /// Republic survey: on every CITYSCHOOL wall a LODSelector named for the Entity's own StaticDecalComponent).
     StaticDecal(Visual),
     /// A RigidBodyComponent: its bytes as stored, and the shape the reference at its offset 748 names.
     RigidBody {
+        /// The shape reference at offset 748 of the component, or `None` if stored as the empty form.
         shape: Option<Reference>,
+        /// The component's bytes, as stored.
         bytes: Vec<u8>,
     },
     /// A GrassVisual: one grass model.
@@ -364,21 +427,32 @@ pub enum ComponentBody {
     Unread(Vec<u8>),
     /// A component of a type read here whose rule refused the bytes within its extent, kept as stored with why.
     Refused {
+        /// The component's bytes within its extent, as stored.
         bytes: Vec<u8>,
+        /// Why the rule refused them.
         why: Refusal,
     },
 }
 
 /// `CollisionLayerBits` slots by the registry's names.
 pub mod layer {
+    /// Slot 0, `Static`.
     pub const STATIC: u32 = 0;
+    /// Slot 2, `Dynamic`.
     pub const DYNAMIC: u32 = 2;
+    /// Slot 3, `Debris`.
     pub const DEBRIS: u32 = 3;
+    /// Slot 4, `DetectionZone`.
     pub const DETECTION_ZONE: u32 = 4;
+    /// Slot 5, `MainCharacter`.
     pub const MAIN_CHARACTER: u32 = 5;
+    /// Slot 6, `Character`.
     pub const CHARACTER: u32 = 6;
+    /// Slot 7, `CharacterNoInteractive`.
     pub const CHARACTER_NO_INTERACTIVE: u32 = 7;
+    /// Slot 13, `WaterLevel`.
     pub const WATER_LEVEL: u32 = 13;
+    /// Slot 14, `Targetable`.
     pub const TARGETABLE: u32 = 14;
     /// `TerrainLod0`; `TerrainLod1` to `4` follow.
     pub const TERRAIN_LOD0: u32 = 16;
@@ -386,15 +460,25 @@ pub mod layer {
 
 /// `QueryLayerBits` slots by the registry's names (the others are unnamed or unset in the data).
 pub mod query {
+    /// Slot 0, `Static`.
     pub const STATIC: u32 = 0;
+    /// Slot 2, `Dynamic`.
     pub const DYNAMIC: u32 = 2;
+    /// Slot 3, `CameraCollision`.
     pub const CAMERA_COLLISION: u32 = 3;
+    /// Slot 5, `CameraOcclusion`.
     pub const CAMERA_OCCLUSION: u32 = 5;
+    /// Slot 9, `Character`.
     pub const CHARACTER: u32 = 9;
+    /// Slot 10, `WaterLevel`.
     pub const WATER_LEVEL: u32 = 10;
+    /// Slot 11, `Particle`.
     pub const PARTICLE: u32 = 11;
+    /// Slot 19, `Raycast`.
     pub const RAYCAST: u32 = 19;
+    /// Slot 20, `OcclusionHeightTest`.
     pub const OCCLUSION_HEIGHT_TEST: u32 = 20;
+    /// Slot 21, `Targeting`.
     pub const TARGETING: u32 = 21;
     /// `TerrainLod0`; `TerrainLod1` to `4` follow.
     pub const TERRAIN_LOD0: u32 = 25;
@@ -405,8 +489,11 @@ pub mod query {
 /// 68) and its two `CollisionLayerBits` (24 each, from 352 and 556), as bit masks by slot, and its `IsGround` (797).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CollisionFilter {
+    /// `QueryFlags` as a bit mask: bit `s` is set when slot `s` ([`query`]) holds 1.
     pub query: u64,
+    /// The two `CollisionLayerBits` as bit masks: bit `s` is set when slot `s` ([`layer`]) holds 1.
     pub layers: [u32; 2],
+    /// `IsGround` (the byte at offset 797), which must be 0 or 1.
     pub ground: bool,
 }
 
@@ -479,9 +566,13 @@ pub enum Tail {
     End,
     /// An inline GameStateData: its id, a u32 and two byte runs.
     GameState {
+        /// The GameStateData object's id.
         id: u64,
+        /// The u32 after the object header, as stored.
         word: u32,
+        /// The first length-prefixed byte run, as stored.
         first: Vec<u8>,
+        /// The second length-prefixed byte run, as stored.
         second: Vec<u8>,
     },
 }
@@ -491,12 +582,15 @@ pub enum Tail {
 pub struct StoredEntity {
     /// Column-major.
     pub matrix: [f32; 16],
+    /// The components, in stored order.
     pub components: Vec<Component>,
     /// The 43 bytes after the components.
     pub run: [u8; 43],
     /// The u32 before the scale.
     pub word: u32,
+    /// The f32 scale after the word, as stored.
     pub scale: f32,
+    /// The Entity's bounding volume.
     pub bounds: BoundingVolume,
     /// The EntityDescriptor's 13 bytes after its header.
     pub descriptor: [u8; 13],
@@ -505,6 +599,7 @@ pub struct StoredEntity {
     /// The ids of the links after the DataLayerFilter's actions (a u32 count, then each a `00` and a u64): the UI
     /// Entities' children or targets on the bodies measured that have any, none on the others.
     pub links: Vec<u64>,
+    /// How the body ends.
     pub tail: Tail,
     /// The inline Hierarchy object that follows the first byte where the second is `00` (a pointer: `03` is none), as
     /// stored from its id: its id, type `0x788BAA0D`, 64 bytes and a HierarchyHandle (id, `0x709FB9D4`, a u32 and a
@@ -1437,6 +1532,7 @@ impl StoredEntity {
 /// An EntityGroup body as stored: an Entity, then its members.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredEntityGroup {
+    /// The Entity part of the body.
     pub entity: StoredEntity,
     /// Its member references, in stored order.
     pub members: Vec<Reference>,
