@@ -1,6 +1,11 @@
 //! Version-26 forges and compression-version-1 data blocks (Shaun White Skateboarding's PC layout): a forge and
 //! blocks laid out here by hand (the LZO2A chunk a hand-worked stream), their refusals, and the hand-checked rows of a
 //! real forge (`installs.shaunwhite/DataPC.forge`) with every entry's blocks decoded.
+//!
+//! The real forge is the playable copy's, the patched build (the game's executable of 2011-08-23, forges of 2010-10-27): 11
+//! entries, 19,661,097 bytes, with the Russian localization the release's `DataPC.forge` (2010-10-19, 38 entries,
+//! 20,545,833 bytes) does not hold. Its numbers are those of a separate Python reading of the file's tables and data
+//! blocks, checked against a hex dump of its first rows.
 mod inputs;
 
 use std::fs::File;
@@ -167,26 +172,28 @@ fn what_disagrees_is_refused() {
     ));
 }
 
-/// The real forge's first two rows as a hex dump of it shows them, and every entry's blocks decoded: 37 entries of
-/// two blocks each (every chunk's checksum checked and its LZO2A stream decoded to its stated size), and the
-/// GlobalMetaFile, which holds no blocks.
+/// The patched build's forge, its first two rows as a hex dump of it shows them (the index at 1134: `00 18 1c 00 00 00
+/// 00 00 | 10 00 00 00 | ff 00 00 00` is offset 0x1C1800, id 0x10, size 0xFF; the name table at 81134: size `ff 00 00 00`,
+/// name id `9e 78 60 dc 27 a2 5b 6c`, timestamp `b2 4d c8 4c`), and every entry's blocks decoded: 10 entries of two blocks
+/// each (every chunk's checksum checked and its LZO2A stream decoded to its stated size), and the GlobalMetaFile, which
+/// holds no blocks.
 #[test]
 fn a_real_version_26_forge_reads_and_decodes() {
     let Some(path) = install_file(Game::ShaunWhite, "DataPC.forge") else {
         return;
     };
     let f = Forge::open(&path).unwrap();
-    assert_eq!((f.version(), f.index.len(), f.file_size), (26, 38, 20_545_833));
+    assert_eq!((f.version(), f.index.len(), f.file_size), (26, 11, 19_661_097));
     let (i, n) = f.entries().next().unwrap();
     assert_eq!(
         (i.offset, i.id, i.size, n.id, n.timestamp),
-        (0x1C_1800, 0x10, 0xFF, 0xA018_E7DF_3EC0_103E, 0x4CBE_0F53)
+        (0x1C_1800, 0x10, 0xFF, 0x6C5B_A227_DC60_789E, 0x4CC8_4DB2)
     );
     assert_eq!(n.name, "GlobalMetaFile");
     let (i, n) = f.entries().nth(1).unwrap();
     assert_eq!(
         (i.offset, i.id, i.size, n.id),
-        (0x1C_2000, 0x80C, 0x4_4716, 0xBB29_F1E7_EFAA_2703)
+        (0x1C_2000, 0x80C, 0x4_4706, 0xF0F0_05DD_5FAA_0B4C)
     );
     assert_eq!(n.name, "Graphic Bootstrap");
     let mut r = File::open(&path).unwrap();
@@ -201,8 +208,9 @@ fn a_real_version_26_forge_reads_and_decodes() {
         assert!(e.resource.chunks.iter().all(|c| c.decoded_size <= 32768));
         decoded += 1;
     }
-    assert_eq!(decoded, 37);
-    // Graphic Bootstrap: a 26-byte metadata block stored raw, then 16 chunks, 512,822 bytes decoded (hand-checked)
+    assert_eq!(decoded, 10);
+    // Graphic Bootstrap: a 26-byte metadata block stored raw, then 16 chunks, 512,822 bytes decoded (the sum of the block's
+    // stated chunk sizes; the release's forge holds the same block)
     let e = read_entry(&f.payload(&mut r, 1).unwrap(), 1 << 26).unwrap();
     assert_eq!(
         (e.metadata.data.len(), e.metadata.chunks[0].checksum),

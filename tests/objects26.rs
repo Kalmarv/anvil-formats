@@ -1,11 +1,16 @@
 //! The objects of version-26 entries: a directory and objects laid out here by hand, their refusals, and every entry
-//! of every forge of `installs.shaunwhite` read to its objects (the census prints the classes and trailers it meets).
+//! of every data forge of `installs.shaunwhite` read to its objects (the census prints the classes and trailers it meets).
+//!
+//! The folder is the playable copy's, the patched build (the game's executable of 2011-08-23, forges of 2010-10-27): 40
+//! forges, 33 of data blocks (3,867 entries, 33 of them each forge's GlobalMetaFile) and the seven `DataPC_StreamedSounds*`
+//! forges the release's folder does not hold, whose 10,308 entries other than the GlobalMetaFile are sound objects without
+//! the block magic. The counts are those of a separate Python reading of the forges' tables and blocks.
 mod inputs;
 
 use std::collections::BTreeMap;
 use std::fs::File;
 
-use anvil_formats::data::read_entry;
+use anvil_formats::data::{Error as DataError, read_entry};
 use anvil_formats::forge::Forge;
 use anvil_formats::objects::{Error, read_objects};
 use inputs::{Game, install};
@@ -67,7 +72,8 @@ fn objects_read_as_laid_and_refuse_what_does_not_fit() {
     ));
 }
 
-/// Every entry of every forge (but each forge's GlobalMetaFile, which holds no blocks) reads to its objects.
+/// Every entry of every data forge (but each forge's GlobalMetaFile, which holds no blocks) reads to its objects, and the
+/// entries of the streamed-sound forges are refused as not being data blocks.
 #[test]
 fn every_real_entry_reads_to_its_objects() {
     let Some(folder) = install(Game::ShaunWhite) else {
@@ -79,7 +85,34 @@ fn every_real_entry_reads_to_its_objects() {
         .filter(|p| p.extension().is_some_and(|x| x == "forge"))
         .collect();
     forges.sort();
-    assert_eq!(forges.len(), 33);
+    assert_eq!(forges.len(), 40);
+    let is_sound = |p: &std::path::PathBuf| {
+        p.file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with("DataPC_StreamedSounds"))
+    };
+    let (sounds, forges): (Vec<_>, Vec<_>) = forges.into_iter().partition(is_sound);
+    assert_eq!((sounds.len(), forges.len()), (7, 33));
+    let mut sound_entries = 0usize;
+    for path in &sounds {
+        let f = Forge::open(path).unwrap();
+        let mut r = File::open(path).unwrap();
+        for (k, n) in f.names.iter().enumerate() {
+            if n.name == "GlobalMetaFile" {
+                continue;
+            }
+            assert!(
+                matches!(
+                    read_entry(&f.payload(&mut r, k).unwrap(), 1 << 30),
+                    Err(DataError::Magic { at: 0, .. })
+                ),
+                "{}: {}",
+                path.display(),
+                n.name
+            );
+            sound_entries += 1;
+        }
+    }
+    assert_eq!(sound_entries, 10_308);
     let (mut entries, mut objects) = (0usize, 0usize);
     let mut classes: BTreeMap<u32, usize> = BTreeMap::new();
     let mut trailers: BTreeMap<usize, usize> = BTreeMap::new();
@@ -117,5 +150,5 @@ fn every_real_entry_reads_to_its_objects() {
     let mut top: Vec<_> = classes.into_iter().collect();
     top.sort_by_key(|(c, n)| (std::cmp::Reverse(*n), *c));
     println!("classes: {:x?}", &top[..top.len().min(40)]);
-    assert_eq!(entries, 3894 - 33);
+    assert_eq!(entries, 3867 - 33);
 }
