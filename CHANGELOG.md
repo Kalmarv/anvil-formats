@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 (2026-10-29)
 
 - Depends on `dx` 0.4.0 and primase-foundations 0.3.0, neither of which has a type in this crate's API.
 - Tests: Shaun White's real-data expectations follow the playable copy, the patched build.
