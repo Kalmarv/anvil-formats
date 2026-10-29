@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Depends on `dx` 0.4.0 and primase-foundations 0.3.0, neither of which has a type in this crate's API.
+- Tests: Shaun White's real-data expectations follow the playable copy, the patched build.
+
 ## 0.1.1 (2026-10-27)
 
 - Depends on `dx` 0.2.0 (`dxcontainer`, used inside the crate only), so a build that holds `dx` 0.2 has one copy of it.
