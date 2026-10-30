@@ -105,6 +105,11 @@ Every key and file the tests read is listed in [`tests/inputs/README.md`](tests/
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report a file this library cannot read.
 
+## Check the examples
+
+From the repository root, `cargo test -p anvil-formats --doc` checks the crate documentation, and
+`cargo build -p anvil-formats --examples` builds its example programs. Examples that read paths need the caller's files; the repository ships no game assets.
+
 ## License
 
 GPL-3.0-or-later; see [LICENSE](LICENSE).
