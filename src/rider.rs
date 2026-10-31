@@ -85,6 +85,11 @@ pub struct RiderSlot {
     pub parts: Vec<CatalogPart>,
     /// The one part whose row has weight exactly 1.0 among the slot's rows, where the table states one.
     pub stated: Option<u64>,
+    /// The colour table whose rows are this slot's variants instead of its parts' own variant tables
+    /// ([`colours`]): [`HAIR_COLOURS`] for the hair activator, [`BEARD_COLOURS`] for the beard activator, `None` for
+    /// every other slot. Observed on Riders Republic's rider tables, where the parts of those two slots list no variant
+    /// tables of their own; the pairing is named by the slot's key, not read from a link in the data.
+    pub colours: Option<&'static str>,
 }
 
 /// Every slot with the parts and variants it lists.
@@ -342,8 +347,10 @@ fn slot_of(archive: &mut Archive, id: u64, in_default: bool) -> Result<Option<Ri
         }
         _ => None,
     };
+    let key = key_of(&table_name);
     Ok(Some(RiderSlot {
-        key: key_of(&table_name),
+        colours: colour_table_of(&key),
+        key,
         table_name,
         table: id,
         in_default,
@@ -356,6 +363,15 @@ fn slot_of(archive: &mut Archive, id: u64, in_default: bool) -> Result<Option<Ri
 pub const HAIR_COLOURS: &str = "MAD_CHR_BODY_HAIRCUTS_Materials";
 /// The table listing the beard colours (the same colours' Materials, the beard's generic Materials replaced).
 pub const BEARD_COLOURS: &str = "MAD_CHR_BODY_BEARDS_Materials";
+
+/// The colour table of the slot with `key` ([`RiderSlot::colours`]).
+fn colour_table_of(key: &str) -> Option<&'static str> {
+    match key {
+        "hair_activator" => Some(HAIR_COLOURS),
+        "beard_activator" => Some(BEARD_COLOURS),
+        _ => None,
+    }
+}
 
 /// A colour a colour table lists: its row's condition (the tag that names the row for `Variant::Row`), its weight as
 /// stored (population odds, no default) and the name of the Material the row's first column links.

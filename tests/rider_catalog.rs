@@ -83,6 +83,10 @@ fn the_slot_tables_list_parts_and_their_variants_and_state_a_default_where_they_
     let beard = by("beard_activator");
     assert!(named(beard, "MAD_CHR_Beard_001_U_H000") && named(beard, "MAD_CHR_Beard_001_U_H006"));
     assert!(hair.stated.is_none() && beard.stated.is_none());
+    // only these two slots take a colour table for their variants
+    assert_eq!(hair.colours, Some(HAIR_COLOURS));
+    assert_eq!(beard.colours, Some(BEARD_COLOURS));
+    assert_eq!(c.slots.iter().filter(|s| s.colours.is_some()).count(), 2);
     assert!(!c.slots.iter().any(|s| s.table_name == "MAD_CHR_HAIR_Materials"));
     // a part's stated variant is a listed variant whose weight is 1.0
     let upper = by("ubody")
