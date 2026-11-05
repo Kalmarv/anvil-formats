@@ -4,7 +4,7 @@
 //! The body (little-endian, offsets in the body):
 //! - 0: the managed byte (1); 1: the object's id; 5: its class ([`MESH`]); 9: the category (u32); 13: the generated
 //!   flag (a byte); 14: the sub-mesh count (u32): 0 on the meshes read here (a mesh that also keeps raw SubMesh
-//!   objects, 81 of the 16,149, stores them next and is refused, [`Error::SubMeshes`]); 18: the bone count `n` (u32);
+//!   objects, 221 of the 16,149, stores them next and is refused, [`Error::SubMeshes`]); 18: the bone count `n` (u32);
 //! - 22: `n` MeshBones of 76 bytes: an id, the class [`MESH_BONE`], a u32 kept as stored (the bone's name hash in the
 //!   meshes examined) and a 4 x 4 f32 matrix;
 //! - 22 + 76`n`: eleven bytes kept as stored; then the class [`COMPILED_MESH`] and the compiled data's length `L`
@@ -12,7 +12,7 @@
 //! - after it: the platform version (16) and SDK version (32), the material count `m` and `m` material object ids
 //!   (u32 each). The body ends there.
 //!
-//! Every one of the 16,068 Mesh objects without raw sub-meshes of the 33 data forges of the PC patched build (forges of
+//! Every one of the 15,928 Mesh objects without raw sub-meshes of the 33 data forges of the PC patched build (forges of
 //! 2010-10-27) reads so, to its exact end.
 #![deny(
     clippy::arithmetic_side_effects,

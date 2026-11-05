@@ -144,7 +144,8 @@ fn every_real_texture_map_reads_to_its_levels() {
                 let t = StoredTextureMap::parse(body)
                     .unwrap_or_else(|err| panic!("{}: {}: {}: {err}", path.display(), n.name, o.name));
                 assert_eq!(t.id, o.id);
-                assert!(storage(t.format).is_some() && d3d_format(t.format).is_some());
+                assert!(storage(t.format).is_some());
+                assert_eq!(d3d_format(t.format).is_none(), t.format == 0);
                 levels += t.levels().unwrap().len();
                 maps += 1;
                 *codes.entry((t.format, t.dimension)).or_default() += 1;

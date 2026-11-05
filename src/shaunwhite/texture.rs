@@ -139,8 +139,8 @@ pub fn storage(code: u32) -> Option<Storage> {
 }
 
 /// The Direct3D 9 format (a `D3DFORMAT` value) the game creates a texture of this format code with, as its renderer
-/// does on the PC build's own files: 2 and 3 `D3DFMT_DXT1`, 4 `D3DFMT_DXT3`, 5 and 12 `D3DFMT_DXT5`, 0
-/// `D3DFMT_A8R8G8B8` (B, G, R, A in memory). Another code is `None`.
+/// does on the PC build's own files: 2 and 3 `D3DFMT_DXT1`, 4 `D3DFMT_DXT3`, 5 and 12 `D3DFMT_DXT5`. Code 0 (four
+/// bytes per texel, [`storage`]) and any other code are `None`: the game was not seen creating a texture of code 0.
 pub fn d3d_format(code: u32) -> Option<u32> {
     const fn fourcc(s: &[u8; 4]) -> u32 {
         u32::from_le_bytes(*s)
@@ -149,7 +149,6 @@ pub fn d3d_format(code: u32) -> Option<u32> {
         2 | 3 => Some(fourcc(b"DXT1")),
         4 => Some(fourcc(b"DXT3")),
         5 | 12 => Some(fourcc(b"DXT5")),
-        0 => Some(21),
         _ => None,
     }
 }
