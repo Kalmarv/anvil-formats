@@ -301,6 +301,55 @@ fn component(v: u16, max: f32) -> f32 {
     (f32::from(v) / max * 2.0 - 1.0) * std::f32::consts::FRAC_1_SQRT_2
 }
 
+/// A rotation stored as its x, y and z (three little-endian f32), w the positive root that makes it unit.
+pub(crate) fn quat_xyz(b: [u8; 12]) -> [f32; 4] {
+    let [x0, x1, x2, x3, y0, y1, y2, y3, z0, z1, z2, z3] = b;
+    let kept = [
+        f32::from_le_bytes([x0, x1, x2, x3]),
+        f32::from_le_bytes([y0, y1, y2, y3]),
+        f32::from_le_bytes([z0, z1, z2, z3]),
+    ];
+    smallest_three(3, kept)
+}
+
+/// A rotation stored in 48 bits: three little-endian u16 words, the low 15 bits of each a component kept
+/// (`(v / 32767 * 2 - 1) / sqrt(2)`, in the order of their components), the index of the one left out bit 15 of the
+/// first word (high) and the second (low). Bit 15 of the third must be clear; the error says so.
+pub(crate) fn quat48(b: [u8; 6]) -> Result<[f32; 4], &'static str> {
+    let [a0, a1, b0, b1, c0, c1] = b;
+    let words = [
+        u16::from_le_bytes([a0, a1]),
+        u16::from_le_bytes([b0, b1]),
+        u16::from_le_bytes([c0, c1]),
+    ];
+    let [w0, w1, w2] = words;
+    if w2 >> 15 != 0 {
+        return Err("with its sign bit set");
+    }
+    let omitted = u8::try_from(((w0 >> 15) << 1) | (w1 >> 15)).unwrap_or(3);
+    let kept = words.map(|w| component(w & 0x7FFF, 32767.0));
+    Ok(smallest_three(omitted, kept))
+}
+
+/// A rotation stored in 64 bits, a little-endian u64 on a ring: bits 8 to 27 the first component kept, bits 32 to 51
+/// the third, bits 52 to 63 and then 0 to 7 (the low ones first) the second, each `(v / (2^20 - 1) * 2 - 1) /
+/// sqrt(2)`; bits 30 and 31 the index of the one left out. Bits 28 and 29 must be clear; the error says so.
+pub(crate) fn quat64(b: [u8; 8]) -> Result<[f32; 4], &'static str> {
+    let u = u64::from_le_bytes(b);
+    if (u >> 28) & 3 != 0 {
+        return Err("with its spare bits set");
+    }
+    let field = |v: u64| {
+        let v = u32::try_from(v & 0xF_FFFF).unwrap_or(0);
+        (v as f32 / 1_048_575.0 * 2.0 - 1.0) * std::f32::consts::FRAC_1_SQRT_2
+    };
+    let first = field(u >> 8);
+    let third = field(u >> 32);
+    let second = field((u >> 52) | ((u & 0xFF) << 12));
+    let omitted = u8::try_from((u >> 30) & 3).unwrap_or(3);
+    Ok(smallest_three(omitted, [first, second, third]))
+}
+
 impl StoredTrack {
     /// The key times in seconds, one for each key: the first key of a u8 or u16 track is at 0, the others at their
     /// stored time over [`TIME_TICKS_PER_SECOND`]; a mask's keys are at the frames of its set bits over
@@ -354,19 +403,7 @@ impl StoredTrack {
             8 => {
                 let v = self.values.as_chunks::<12>().0;
                 counted(v.len())?;
-                Ok(Values::Quaternions(
-                    v.iter()
-                        .map(|b| {
-                            let [x0, x1, x2, x3, y0, y1, y2, y3, z0, z1, z2, z3] = *b;
-                            let kept = [
-                                f32::from_le_bytes([x0, x1, x2, x3]),
-                                f32::from_le_bytes([y0, y1, y2, y3]),
-                                f32::from_le_bytes([z0, z1, z2, z3]),
-                            ];
-                            smallest_three(3, kept)
-                        })
-                        .collect(),
-                ))
+                Ok(Values::Quaternions(v.iter().map(|b| quat_xyz(*b)).collect()))
             }
             3 => {
                 let v = self.values.as_chunks::<4>().0;
@@ -386,21 +423,7 @@ impl StoredTrack {
                 let v = self.values.as_chunks::<6>().0;
                 counted(v.len())?;
                 v.iter()
-                    .map(|b| {
-                        let [a0, a1, b0, b1, c0, c1] = *b;
-                        let words = [
-                            u16::from_le_bytes([a0, a1]),
-                            u16::from_le_bytes([b0, b1]),
-                            u16::from_le_bytes([c0, c1]),
-                        ];
-                        let [w0, w1, w2] = words;
-                        if w2 >> 15 != 0 {
-                            return Err(Error::Values("a kind 4 value with its sign bit set".into()));
-                        }
-                        let omitted = u8::try_from(((w0 >> 15) << 1) | (w1 >> 15)).unwrap_or(3);
-                        let kept = words.map(|w| component(w & 0x7FFF, 32767.0));
-                        Ok(smallest_three(omitted, kept))
-                    })
+                    .map(|b| quat48(*b).map_err(|why| Error::Values(format!("a kind 4 value {why}"))))
                     .collect::<Result<Vec<_>, _>>()
                     .map(Values::Quaternions)
             }
@@ -408,21 +431,7 @@ impl StoredTrack {
                 let v = self.values.as_chunks::<8>().0;
                 counted(v.len())?;
                 v.iter()
-                    .map(|b| {
-                        let u = u64::from_le_bytes(*b);
-                        if (u >> 28) & 3 != 0 {
-                            return Err(Error::Values("a kind 5 value with its spare bits set".into()));
-                        }
-                        let field = |v: u64| {
-                            let v = u32::try_from(v & 0xF_FFFF).unwrap_or(0);
-                            (v as f32 / 1_048_575.0 * 2.0 - 1.0) * std::f32::consts::FRAC_1_SQRT_2
-                        };
-                        let first = field(u >> 8);
-                        let third = field(u >> 32);
-                        let second = field((u >> 52) | ((u & 0xFF) << 12));
-                        let omitted = u8::try_from((u >> 30) & 3).unwrap_or(3);
-                        Ok(smallest_three(omitted, [first, second, third]))
-                    })
+                    .map(|b| quat64(*b).map_err(|why| Error::Values(format!("a kind 5 value {why}"))))
                     .collect::<Result<Vec<_>, _>>()
                     .map(Values::Quaternions)
             }

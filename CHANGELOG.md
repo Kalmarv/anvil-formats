@@ -7,6 +7,8 @@
 - `shaunwhite::mesh` reads Shaun White Skateboarding Meshes: their MeshBones, the inline CompiledMesh's vertex streams, 16-bit indices, both draw-range partitions and bone palettes (`CompiledMesh::palettes`), the vertex layout the game declares (`CompiledMesh::layout`) and the material ids. It also reads the raw SubMeshes some meshes keep (`StoredMesh::sub_meshes`): each SubMesh's indices, per-triangle runs, positions, normals, colours, UV channels (`UvChannel`), morph channels (`MorphChannel`), material id and the copy it owns, so every Mesh of the game's data forges reads.
 - Breaking: `shaunwhite::mesh::Error::SubMeshes` is removed, since a mesh with SubMeshes now reads; a SubMesh copy nested too deep is `Error::Depth`.
 - `shaunwhite::skeleton` reads Shaun White Skateboarding Skeletons: the bones with their parents and bind pose (global and local position and rotation), orientation constraints, pose groups, IK and centre-of-mass data and mirror pairs; every Skeleton of the game's data forges reads, and its bind pose composes parent to child.
+- `shaunwhite::animation` reads Shaun White Skateboarding Animations and AnimSets: a clip's length, bone mappings and tracks with their key times (`Track::seconds`) and values (`Track::values`: rotations in 48 and 64 bits and as f32, translations packed in 32 bits and as i16 millimetres), and the sets' clip pairs; every Animation and AnimSet of the game's data forges reads.
+- `animation`'s 48-bit, 64-bit and f32 rotation decoders are shared with `shaunwhite::animation`; their results are unchanged.
 - Tests: an `oracles.runtime` set compares both readers with what the game's own renderer uploaded and declared.
 - The README is rewritten; the real-data test setup moved to CONTRIBUTING.md.
 
