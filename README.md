@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ```sh
-cargo run --example forge_listing -- path/to/DataPC_MAD_WhiteRoom.forge
+cargo run --example forge_listing -- path/to/DataPC.forge
 ```
 
 Shaun White Skateboarding's name records carry no type id, so its entries list with `kind` set to `None`. Read them with `forge::Forge::payload`, `data::read_entry` and `objects::read_objects`, then pass each object's body to a reader in [`shaunwhite`](src/shaunwhite/mod.rs).
