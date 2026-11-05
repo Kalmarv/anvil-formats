@@ -1,19 +1,19 @@
-//! Shaun White Skateboarding (PC) Mesh objects: the mesh's bones, its inline CompiledMesh (vertex streams, 16-bit
-//! indices and draw ranges) and its material list, read as stored.
+//! Shaun White Skateboarding (PC) Mesh objects: the mesh's raw SubMeshes, its bones, its inline CompiledMesh (vertex
+//! streams, 16-bit indices and draw ranges) and its material list, read as stored.
 //!
 //! The body (little-endian, offsets in the body):
 //! - 0: the managed byte (1); 1: the object's id; 5: its class ([`MESH`]); 9: the category (u32); 13: the generated
-//!   flag (a byte); 14: the sub-mesh count (u32): 0 on the meshes read here (a mesh that also keeps raw SubMesh
-//!   objects, 221 of the 16,149, stores them next and is refused, [`Error::SubMeshes`]); 18: the bone count `n` (u32);
-//! - 22: `n` MeshBones of 76 bytes: an id, the class [`MESH_BONE`], a u32 kept as stored (the bone's name hash in the
+//!   flag (a byte); 14: the SubMesh count `s` (u32); 18: `s` SubMeshes ([`SubMesh`]), 0 on most meshes; then the bone
+//!   count `n` (u32);
+//! - `n` MeshBones of 76 bytes: an id, the class [`MESH_BONE`], a u32 kept as stored (the bone's name hash in the
 //!   meshes examined) and a 4 x 4 f32 matrix;
-//! - 22 + 76`n`: eleven bytes kept as stored; then the class [`COMPILED_MESH`] and the compiled data's length `L`
-//!   (u32 each), and the compiled data ([`CompiledMesh`]);
+//! - eleven bytes kept as stored; then the class [`COMPILED_MESH`] and the compiled data's length `L` (u32 each), and
+//!   the compiled data ([`CompiledMesh`]);
 //! - after it: the platform version (16) and SDK version (32), the material count `m` and `m` material object ids
 //!   (u32 each). The body ends there.
 //!
-//! Every one of the 15,928 Mesh objects without raw sub-meshes of the 33 data forges of the PC patched build (forges of
-//! 2010-10-27) reads so, to its exact end.
+//! Every one of the 16,149 Mesh objects of the 33 data forges of the PC patched build (forges of 2010-10-27) reads
+//! so, to its exact end; 221 of them keep SubMeshes, and every mesh with morph streams is among those 221.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
@@ -32,6 +32,12 @@ pub const MESH: u32 = 0x415D_9568;
 pub const MESH_BONE: u32 = 0x9EF0_E7A1;
 /// The class id of a CompiledMesh (the CRC-32 of `CompiledMesh`).
 pub const COMPILED_MESH: u32 = 0xFC9E_1595;
+/// The class id of a SubMesh (the CRC-32 of `SubMesh`).
+pub const SUB_MESH: u32 = 0x5755_DE7F;
+/// The class id of a UVChannel (the CRC-32 of `UVChannel`).
+pub const UV_CHANNEL: u32 = 0xBDAD_8273;
+/// The class id of a MorphChannel (the CRC-32 of `MorphChannel`).
+pub const MORPH_CHANNEL: u32 = 0xE70C_5754;
 
 /// Why a Mesh body can't be read.
 #[derive(Debug, thiserror::Error)]
@@ -49,9 +55,9 @@ pub enum Error {
         /// The value this reader accepts there.
         expected: u64,
     },
-    /// The mesh keeps raw SubMesh objects (its sub-mesh count is not 0); their layout is not read.
-    #[error("Mesh: {0} raw sub-meshes, whose layout is not read")]
-    SubMeshes(u32),
+    /// A SubMesh's copy holds a copy in turn, deeper than [`MAX_SUB_MESH_DEPTH`].
+    #[error("Mesh: SubMesh copies nested deeper than {MAX_SUB_MESH_DEPTH}")]
+    Depth,
     /// Bytes follow the material list.
     #[error("Mesh: {0} bytes after the material list")]
     Trailing(usize),
@@ -308,6 +314,94 @@ impl CompiledMesh {
     }
 }
 
+/// How deep [`SubMesh::copy`] may nest: one level on every stored mesh (a SubMesh's copy has none).
+pub const MAX_SUB_MESH_DEPTH: usize = 4;
+
+/// One raw SubMesh: one part of the mesh as authored (one material's triangles), before it is compiled. Every range
+/// is of the mesh body; `n` is the vertex count (the positions' count) and `t` the triangle count.
+///
+/// Each SubMesh is one range of [`CompiledMesh::ranges`] (the one using [`SubMesh::material`]): the same vertex
+/// positions bit for bit and the same triangles, in another vertex and triangle order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SubMesh {
+    /// The SubMesh object's id.
+    pub id: u32,
+    /// The u32 after the class (0 on every stored SubMesh).
+    pub unknown_head: u32,
+    /// The triangles: `3t` u16 vertex indices, a triangle list.
+    pub indices: Range<usize>,
+    /// `n` u32, or none: for each vertex, the index of the authored vertex it was split from (vertices with equal
+    /// values have equal positions). The copy ([`SubMesh::copy`]) has none.
+    pub source_vertices: Range<usize>,
+    /// The u32 after them (0 on every stored SubMesh).
+    pub unknown_faces: u32,
+    /// `t` u32, one per triangle, kept as stored (bit masks such as 1, 2, 4, 8).
+    pub face_words: Range<usize>,
+    /// `t` bytes, one per triangle, kept as stored (3 on most).
+    pub face_bytes: Range<usize>,
+    /// `n` positions, three f32 each.
+    pub positions: Range<usize>,
+    /// `n` normals, three f32 each.
+    pub normals: Range<usize>,
+    /// `n` tangents, three f32 each (unit vectors perpendicular to the normals), or none: present on every copy
+    /// ([`SubMesh::copy`]) and on no original.
+    pub tangents: Range<usize>,
+    /// `n` binormals, three f32 each (unit vectors perpendicular to the normals), or none, as the tangents.
+    pub binormals: Range<usize>,
+    /// `n` vertex colours (Direct3D colours: B, G, R, A), or none: the compiled vertices' colour where the mesh has one.
+    pub colours: Range<usize>,
+    /// Three further runs of `n` u32 each, or none, kept as stored: the second and third are rarely present, the last
+    /// is on every SubMesh.
+    pub vertex_words: [Range<usize>; 3],
+    /// The UV channels, in order; the first is the compiled vertices' first UV.
+    pub uv_channels: Vec<UvChannel>,
+    /// The u32 before the morph channels (0 on every stored SubMesh).
+    pub unknown_morph: u32,
+    /// The morph channels: one per morph stream of the compiled data that this SubMesh moves.
+    pub morphs: Vec<MorphChannel>,
+    /// The byte after the morph channels: 1 when there are any, else 0.
+    pub has_morphs: u8,
+    /// The material object id of this SubMesh: the id [`StoredMesh::materials`] gives for its range.
+    pub material: u32,
+    /// The two bytes after the material (1 and 1 on every stored SubMesh).
+    pub unknown_flags: [u8; 2],
+    /// A second SubMesh owned by this one: on every stored mesh, a copy with the same indices, positions and material,
+    /// with tangents and binormals, no source vertices and no morph channels; it holds none in turn.
+    pub copy: Option<Box<SubMesh>>,
+    /// The u32 at the end, kept as stored (0 on most).
+    pub unknown_tail: u32,
+}
+
+/// One UV channel of a [`SubMesh`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UvChannel {
+    /// The u32 before the class (0 on every stored channel).
+    pub id: u32,
+    /// The u32 after the class (0 on every stored channel).
+    pub kind: u32,
+    /// The byte after it, kept as stored.
+    pub unknown: u8,
+    /// `n` UVs, two f32 each.
+    pub uvs: Range<usize>,
+    /// `n` u32, or none, kept as stored (present where the SubMesh has source vertices).
+    pub source: Range<usize>,
+}
+
+/// One morph channel of a [`SubMesh`]: the whole SubMesh's vertices in one morph target.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MorphChannel {
+    /// The MorphChannel object's id.
+    pub id: u32,
+    /// The u32 after the class, kept as stored.
+    pub name: u32,
+    /// `n` positions, three f32 each, absolute (not offsets from [`SubMesh::positions`]).
+    pub positions: Range<usize>,
+    /// `n` normals, three f32 each.
+    pub normals: Range<usize>,
+    /// `n` UVs, two f32 each.
+    pub uvs: Range<usize>,
+}
+
 /// A Mesh body as stored.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StoredMesh {
@@ -317,6 +411,8 @@ pub struct StoredMesh {
     pub category: u32,
     /// The generated flag, as stored.
     pub generated: u8,
+    /// The raw SubMeshes (none on most meshes).
+    pub sub_meshes: Vec<SubMesh>,
     /// The mesh's bones.
     pub bones: Vec<MeshBone>,
     /// The eleven bytes before the compiled data, as stored.
@@ -347,8 +443,157 @@ fn range(c: &mut Cursor<'_>, n: usize, name: &'static str) -> Result<Range<usize
     c.take(n).field(name)?;
     Ok(start..c.position())
 }
+fn n64(v: usize) -> u64 {
+    u64::try_from(v).unwrap_or(u64::MAX)
+}
 fn usize_of(v: u32) -> usize {
     usize::try_from(v).unwrap_or(usize::MAX)
+}
+
+/// A counted run of `each`-byte elements: the count (u32), then the elements.
+fn run(c: &mut Cursor<'_>, each: usize, name: &'static str) -> Result<(usize, Range<usize>), Error> {
+    let n = c.count(LE, each).field(name)?;
+    Ok((n, range(c, n.saturating_mul(each), name)?))
+}
+/// A run that holds `n` elements, or none where `optional`.
+fn run_of(
+    c: &mut Cursor<'_>,
+    each: usize,
+    n: usize,
+    optional: bool,
+    name: &'static str,
+) -> Result<Range<usize>, Error> {
+    let (found, r) = run(c, each, name)?;
+    if found == n || (optional && found == 0) {
+        Ok(r)
+    } else {
+        Err(Error::Value {
+            what: name,
+            found: n64(found),
+            expected: n64(n),
+        })
+    }
+}
+/// A count that is 0 on every stored SubMesh, whose elements' size is therefore not known.
+fn empty(c: &mut Cursor<'_>, name: &'static str) -> Result<(), Error> {
+    expect(name, word(c, name)?, 0u32)
+}
+
+fn sub_mesh(c: &mut Cursor<'_>, depth: usize) -> Result<SubMesh, Error> {
+    if depth > MAX_SUB_MESH_DEPTH {
+        return Err(Error::Depth);
+    }
+    expect("SubMesh managed byte", c.u8().field("SubMesh managed byte")?, 1u8)?;
+    let id = word(c, "SubMesh id")?;
+    expect("SubMesh class", word(c, "SubMesh class")?, SUB_MESH)?;
+    let unknown_head = word(c, "SubMesh u32 after the class")?;
+    let (index_count, indices) = run(c, 2, "SubMesh indices")?;
+    if !index_count.is_multiple_of(3) {
+        return Err(Error::Value {
+            what: "SubMesh index count, a multiple of 3",
+            found: n64(index_count),
+            expected: n64(index_count.div_euclid(3).saturating_mul(3)),
+        });
+    }
+    let triangles = index_count.div_euclid(3);
+    let (sources, source_vertices) = run(c, 4, "SubMesh source vertices")?;
+    let unknown_faces = word(c, "SubMesh u32 before the faces")?;
+    let face_words = run_of(c, 4, triangles, false, "SubMesh face words")?;
+    let face_bytes = run_of(c, 1, triangles, false, "SubMesh face bytes")?;
+    let (n, positions) = run(c, 12, "SubMesh positions")?;
+    if sources != 0 && sources != n {
+        return Err(Error::Value {
+            what: "SubMesh source vertices",
+            found: n64(sources),
+            expected: n64(n),
+        });
+    }
+    let normals = run_of(c, 12, n, false, "SubMesh normals")?;
+    let tangents = run_of(c, 12, n, true, "SubMesh tangents")?;
+    let binormals = run_of(c, 12, n, true, "SubMesh binormals")?;
+    let colours = run_of(c, 4, n, true, "SubMesh colours")?;
+    let second = run_of(c, 4, n, true, "SubMesh second vertex words")?;
+    let third = run_of(c, 4, n, true, "SubMesh third vertex words")?;
+    empty(c, "SubMesh first empty run")?;
+    let last = run_of(c, 4, n, true, "SubMesh last vertex words")?;
+    empty(c, "SubMesh second empty run")?;
+    empty(c, "SubMesh third empty run")?;
+    let channels = c.count(LE, 21).field("UV channel count")?;
+    let uv_channels = (0..channels)
+        .map(|_| {
+            let id = word(c, "UV channel id")?;
+            expect("UV channel class", word(c, "UV channel class")?, UV_CHANNEL)?;
+            let kind = word(c, "UV channel u32 after the class")?;
+            let unknown = c.u8().field("UV channel byte")?;
+            let uvs = run_of(c, 8, n, false, "UV channel UVs")?;
+            let source = run_of(c, 4, n, true, "UV channel source words")?;
+            Ok(UvChannel {
+                id,
+                kind,
+                unknown,
+                uvs,
+                source,
+            })
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let unknown_morph = word(c, "SubMesh u32 before the morph channels")?;
+    let count = c.count(LE, 24).field("morph channel count")?;
+    let morphs = (0..count)
+        .map(|_| {
+            let id = word(c, "morph channel id")?;
+            expect(
+                "morph channel class",
+                word(c, "morph channel class")?,
+                MORPH_CHANNEL,
+            )?;
+            let name = word(c, "morph channel u32 after the class")?;
+            Ok(MorphChannel {
+                id,
+                name,
+                positions: run_of(c, 12, n, false, "morph channel positions")?,
+                normals: run_of(c, 12, n, false, "morph channel normals")?,
+                uvs: run_of(c, 8, n, false, "morph channel UVs")?,
+            })
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let has_morphs = c.u8().field("SubMesh morph flag")?;
+    let material = word(c, "SubMesh material")?;
+    let unknown_flags = c.array::<2>().field("SubMesh bytes after the material")?;
+    let copy = match c.u8().field("SubMesh copy pointer tag")? {
+        0 => Some(Box::new(sub_mesh(c, depth.saturating_add(1))?)),
+        3 => None,
+        found => {
+            return Err(Error::Value {
+                what: "SubMesh copy pointer tag (0 inline, 3 none)",
+                found: u64::from(found),
+                expected: 3,
+            });
+        }
+    };
+    let unknown_tail = word(c, "SubMesh last u32")?;
+    Ok(SubMesh {
+        id,
+        unknown_head,
+        indices,
+        source_vertices,
+        unknown_faces,
+        face_words,
+        face_bytes,
+        positions,
+        normals,
+        tangents,
+        binormals,
+        colours,
+        vertex_words: [second, third, last],
+        uv_channels,
+        unknown_morph,
+        morphs,
+        has_morphs,
+        material,
+        unknown_flags,
+        copy,
+        unknown_tail,
+    })
 }
 
 fn draw_ranges(c: &mut Cursor<'_>, n: u32) -> Result<Vec<DrawRange>, Error> {
@@ -440,10 +685,17 @@ impl StoredMesh {
         expect("class", word(&mut c, "class")?, MESH)?;
         let category = word(&mut c, "category")?;
         let generated = c.u8().field("generated")?;
-        let submesh_count = word(&mut c, "sub-mesh count")?;
-        if submesh_count != 0 {
-            return Err(Error::SubMeshes(submesh_count));
-        }
+        let count = c.count(LE, 1).field("SubMesh count")?;
+        let sub_meshes = (0..count)
+            .map(|_| {
+                expect(
+                    "SubMesh pointer tag (0 inline)",
+                    c.u8().field("SubMesh pointer tag")?,
+                    0u8,
+                )?;
+                sub_mesh(&mut c, 0)
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
         let bone_count = c.count(LE, 76).field("bone count")?;
         let mut bones = Vec::with_capacity(bone_count);
         for _ in 0..bone_count {
@@ -474,6 +726,7 @@ impl StoredMesh {
             id,
             category,
             generated,
+            sub_meshes,
             bones,
             unknown,
             compiled,
