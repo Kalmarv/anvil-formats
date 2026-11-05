@@ -24,7 +24,12 @@ primase_testdata::inputs! {
     }
     keys {}
     tools {}
-    oracle_sets {}
+    oracle_sets {
+        Runtime = "runtime" {
+            about: "what a game's own renderer creates and uploads when it loads the game's files: texture formats and level bytes, vertex declarations and buffer bytes, keyed to the forge objects they came from",
+            source: "a resource trace of the game's own loader and renderer (the PC executable's code, run unchanged) on the user's own install, its uploads matched byte for byte to the objects; tables of hashes and declarations only, no game bytes",
+        },
+    }
     declared {
         Query::Install(Game::Riders, Some("DataPC_MAD_USNAT.forge")) => {
             status: Live,
@@ -55,6 +60,18 @@ primase_testdata::inputs! {
             gate: true,
             about: r#"Shaun White Skateboarding level-01 forge (version 26; the same bytes in the 1.0 release and the patched build): every texture in all 253 GridCellDataBlock entries; focused collision shape and inert-component fixtures in four cells; level placements, materials, collision and stored water flags, harbour tint and placement; 110 omni and 79 spot placements plus the root SkyLight and sun; restored metro mural and CliffDry layer weights; exact metro graffiti wall key for the REF-backed albedo derivation; the Shaun White Skateboarding world builder's tests (https://github.com/Kalmarv/primase/tree/main/worlds/shaunwhite/tests)"#,
             source: r#"the user's own copy, extracted unchanged; object directory/envelopes hand-checked separately, texture fields cross-checked with AnvilToolkit 1.3.7's AC2/Brotherhood readers and AC2 schema, duplicated compiled metadata and exact mip lengths checked on every texture; BC1/2/3 decoded against third-party bcdec_rs 0.2.0; code 12's BC3 storage established by sizes and normal-map content, not the AC2 enum; collision fields cross-checked with the AC2 schema and hand-inspected inert and multi-inert entity/shape references; light fields checked with the AC2 schema and exact body ends, SkyLight fields with native property descriptors and serializer; physical light units, colour encoding and direction signs remain approximations of the stored values; restored layer equation from the shipped SDB2 HLSL and Microsoft-disassembled SM3 pixel shader, native material property hashes identify layer tints and alpha switches"#,
+        },
+        Query::Oracle(OracleSet::Runtime, Game::ShaunWhite, "textures.tsv") => {
+            status: Live,
+            gate: false,
+            about: r#"every texture level the game uploaded on its New Game route through the start of the level-02 load whose bytes equal a stored TextureMap level: forge, entry, object id, face, mip, width, height, the Direct3D format the game created the texture with and the SHA-256 of the uploaded bytes (1,037 TextureMaps, 6,024 levels); tests/sws_texture.rs"#,
+            source: r#"a resource trace of the PC patched build's executable run on installs.shaunwhite, every upload's bytes hashed at Unlock and matched to the levels of every TextureMap of the 33 data forges"#,
+        },
+        Query::Oracle(OracleSet::Runtime, Game::ShaunWhite, "meshes.tsv") => {
+            status: Live,
+            gate: false,
+            about: r#"every vertex and index buffer the game uploaded on the same route whose bytes equal a stored mesh's vertex stream or index bytes: forge, entry, object id, flags, stride, which part, the SHA-256 of the uploaded bytes, and for vertex buffers the vertex declaration, stream stride and offset of each draw that bound it (516 meshes); tests/sws_mesh.rs"#,
+            source: r#"the same resource trace: each buffer's bytes hashed at Unlock, each distinct draw's declaration and stream bindings logged, matched to every Mesh of the 33 data forges"#,
         },
     }
     debug {}

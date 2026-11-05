@@ -5,7 +5,7 @@ A Rust library that reads the data files of Ubisoft's Anvil engine: `.forge` arc
 It was written against two games' own files: **Riders Republic** (Steam build 25394987; `.forge` version 27, zstd-compressed blocks) and **Shaun White Skateboarding** (PC, 2010; `.forge` version 26, LZO2A blocks). It reads the archive index and name tables, an entry's compressed data blocks (checksum verified), and the resources inside as plain records that keep every byte it does not interpret as stored.
 
 - **Riders Republic:** Entities and EntityGroups, meshes and vertex layouts, materials, texture sets, texture maps and mips, material templates with their shader permutations and DXBC shader containers, LOD selectors, collision shapes, skeletons, rigs and animation, build tables (character customization), terrain node layers and their compressed code, floor heights, world grids, grass, water, decals, impostors, lights, sky, ambiance and forecast presets.
-- **Shaun White Skateboarding:** the objects of a version-26 entry, scene entities, collision, spawn markers, grind guidance, lights, materials, and the SDB2 shader databases that ship beside the forges.
+- **Shaun White Skateboarding:** the objects of a version-26 entry, scene entities, collision, spawn markers, grind guidance, lights, materials, textures and their mip levels, meshes with their vertex layouts, draw ranges and bone palettes, and the SDB2 shader databases that ship beside the forges.
 
 The formats are documented in the [Engine wiki](https://kalmarv.github.io/engine-wiki/engines/anvil/); each module's docs say which games and builds its layout was established on. It is the Anvil reader of [primase](https://github.com/Kalmarv/primase), a game-asset conversion library.
 

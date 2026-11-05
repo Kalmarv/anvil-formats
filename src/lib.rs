@@ -23,7 +23,8 @@
 //!   heights ([`floor`]), world grids ([`grid`]), grass ([`grass`]), water ([`water`]), decals ([`ddecal`]),
 //!   impostors ([`impostor`]), lights, sky and looks ([`light`], [`sky`], [`look`], [`controller`], [`gidyn`]).
 //! - **Shaun White Skateboarding** ([`shaunwhite`]): its scene entities, collision, markers, grind guidance,
-//!   lights and materials as its version-26 forges store them, and its SDB2 shader databases.
+//!   lights, materials, textures and meshes (with their vertex layouts) as its version-26 forges store them, and its
+//!   SDB2 shader databases.
 //!
 //! # Third-party tools these docs cite
 //!

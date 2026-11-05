@@ -18,6 +18,7 @@ dxcontainer.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+sha2.workspace = true
 primase-testdata.workspace = true
 
 [lints]
@@ -37,6 +38,7 @@ publish = true
 [workspace.dependencies]
 dxcontainer = { version = "0.4.0", git = "https://github.com/Kalmarv/dx", rev = "39883bd084ad1db1f66416f41b25cf2529f9eec1" }
 primase-foundations = "0.3.1"
+sha2 = "0.10"
 primase-testdata = { version = "0.1.6", git = "https://github.com/Kalmarv/primase-testdata", rev = "40acdd6a2775412cc812f67e5b3edfdc9b76c54c" }
 thiserror = { version = "=2.0.21", default-features = false, features = ["std"] }
 
