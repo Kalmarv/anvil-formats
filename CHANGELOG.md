@@ -9,7 +9,7 @@
 - `shaunwhite::skeleton` reads Shaun White Skateboarding Skeletons: the bones with their parents and bind pose (global and local position and rotation), orientation constraints, pose groups, IK and centre-of-mass data and mirror pairs; every Skeleton of the game's data forges reads, and its bind pose composes parent to child.
 - `shaunwhite::animation` reads Shaun White Skateboarding Animations and AnimSets: a clip's length, bone mappings and tracks with their key times (`Track::seconds`) and values (`Track::values`: rotations in 48 and 64 bits and as f32, translations packed in 32 bits and as i16 millimetres), and the sets' clip pairs; every Animation and AnimSet of the game's data forges reads.
 - `animation`'s 48-bit, 64-bit and f32 rotation decoders are shared with `shaunwhite::animation`; their results are unchanged.
-- Tests: an `oracles.runtime` set compares both readers with what the game's own renderer uploaded and declared.
+- Tests: an `oracles.runtime` set compares both readers with what the game's own renderer uploaded and declared, and the Skeleton and mesh readers with the bone matrices of its skinned draws (`skin.tsv`: child bones sit at their stored local positions with the MeshBone matrices as the inverse bind).
 - The README is rewritten; the real-data test setup moved to CONTRIBUTING.md.
 
 ## 0.1.2 (2026-10-29)

@@ -73,6 +73,12 @@ primase_testdata::inputs! {
             about: r#"every vertex and index buffer the game uploaded on the same route whose bytes equal a stored mesh's vertex stream or index bytes: forge, entry, object id, flags, stride, which part, the SHA-256 of the uploaded bytes, and for vertex buffers the vertex declaration, stream stride and offset of each draw that bound it (516 meshes); tests/sws_mesh.rs"#,
             source: r#"the same resource trace: each buffer's bytes hashed at Unlock, each distinct draw's declaration and stream bindings logged, matched to every Mesh of the 33 data forges"#,
         },
+        Query::Oracle(OracleSet::Runtime, Game::ShaunWhite, "skin.tsv") => {
+            status: Live,
+            gate: false,
+            about: r#"the bone matrices of every skinned draw the game made on the same route (40 draws of 6 meshes in frames 7199 to 7204): forge, entry, mesh id, frame, draw range, palette entry, the MeshBone's name CRC and the three constant registers of the vertex shader's `g_Bones` array that hold the bone (12 f32 as u32 hex); tests/sws_skeleton.rs"#,
+            source: r#"the same resource trace: each skinned draw's vertex-shader float constants copied at the draw, its shader's constant table naming `g_Bones`, its vertex buffer matched to a stored mesh's stream and its index range to one of the mesh's draw ranges"#,
+        },
     }
     debug {}
 }

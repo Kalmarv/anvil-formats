@@ -226,3 +226,179 @@ fn every_real_skeleton_reads_and_its_bind_pose_composes() {
     println!("{skeletons} Skeletons, {bones} bones, {composed} composed from their parents; {parts:?}");
     assert!(skeletons > 0 && composed > 0);
 }
+
+/// A 4×4 matrix, rows of column-vector form.
+type M4 = [[f64; 4]; 4];
+
+fn mul4(a: &M4, b: &M4) -> M4 {
+    std::array::from_fn(|i| std::array::from_fn(|j| (0..4).map(|k| a[i][k] * b[k][j]).sum()))
+}
+
+/// The inverse by Gauss-Jordan elimination with partial pivoting.
+fn inv4(m: &M4) -> M4 {
+    let mut a: [[f64; 8]; 4] = std::array::from_fn(|i| {
+        std::array::from_fn(|j| {
+            if j < 4 {
+                m[i][j]
+            } else {
+                f64::from(u8::from(j - 4 == i))
+            }
+        })
+    });
+    for c in 0..4 {
+        let p = (c..4)
+            .max_by(|&x, &y| a[x][c].abs().total_cmp(&a[y][c].abs()))
+            .expect("a pivot row");
+        a.swap(c, p);
+        let d = a[c][c];
+        a[c] = a[c].map(|x| x / d);
+        for r in 0..4 {
+            if r != c {
+                let f = a[r][c];
+                let row = a[c];
+                for (x, y) in a[r].iter_mut().zip(row) {
+                    *x -= f * y;
+                }
+            }
+        }
+    }
+    std::array::from_fn(|i| std::array::from_fn(|j| a[i][j + 4]))
+}
+
+/// The game skins with each bone's MeshBone matrix as the inverse bind (the `runtime` oracle's `g_Bones` registers
+/// are the bone's pose times the stored matrix, transposed to column form): for every bone of a traced skinned draw
+/// whose parent is in the same draw, the local translation the two bones' registers and MeshBone matrices give,
+/// `IB_p · S_p⁻¹ · S_c · IB_c⁻¹`, is the bone's stored local position in its Skeleton. Every pair holds in the first
+/// frame each mesh is drawn; later frames move a few bones by the clip's animation. Each palette entry also names the
+/// MeshBone the oracle's row does.
+#[test]
+fn skinned_draws_place_child_bones_at_their_stored_local_positions() {
+    let (Some(folder), Some(table)) = (
+        install(Game::ShaunWhite),
+        inputs::oracle(inputs::OracleSet::Runtime, Game::ShaunWhite, "skin.tsv"),
+    ) else {
+        return;
+    };
+    type Draw = (String, usize, u32, u32, usize);
+    let mut draws: BTreeMap<Draw, Vec<(usize, u32, M4)>> = BTreeMap::new();
+    for line in std::fs::read_to_string(table).unwrap().lines() {
+        let f: Vec<&str> = line.split('\t').collect();
+        let v: Vec<f64> = f[7]
+            .split(' ')
+            .map(|w| f64::from(f32::from_bits(u32::from_str_radix(w, 16).unwrap())))
+            .collect();
+        let s: M4 = std::array::from_fn(|i| {
+            if i < 3 {
+                std::array::from_fn(|j| v[4 * i + j])
+            } else {
+                [0.0, 0.0, 0.0, 1.0]
+            }
+        });
+        let key = (
+            f[0].to_string(),
+            f[1].parse().unwrap(),
+            f[2].parse().unwrap(),
+            f[3].parse().unwrap(),
+            f[4].parse().unwrap(),
+        );
+        let crc = u32::from_str_radix(f[6].trim_start_matches("0x"), 16).unwrap();
+        draws
+            .entry(key)
+            .or_default()
+            .push((f[5].parse().unwrap(), crc, s));
+    }
+    // every Skeleton of the install, and the meshes the oracle names
+    let mut forges: Vec<_> = std::fs::read_dir(&folder)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|x| x == "forge"))
+        .filter(|p| {
+            !p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("DataPC_StreamedSounds")
+        })
+        .collect();
+    forges.sort();
+    let wanted: std::collections::BTreeSet<(String, usize, u32)> =
+        draws.keys().map(|(f, e, m, _, _)| (f.clone(), *e, *m)).collect();
+    let mut skeletons = Vec::new();
+    let mut meshes = BTreeMap::new();
+    for path in &forges {
+        let fname = path.file_name().unwrap().to_string_lossy().to_string();
+        let f = Forge::open(path).unwrap();
+        let mut r = File::open(path).unwrap();
+        for (k, n) in f.names.iter().enumerate() {
+            if n.name == "GlobalMetaFile" {
+                continue;
+            }
+            let e = read_entry(&f.payload(&mut r, k).unwrap(), 1 << 30).unwrap();
+            for o in read_objects(&e.metadata.data, &e.resource.data).unwrap() {
+                let body = &e.resource.data[o.body.clone()];
+                if o.class == SKELETON {
+                    skeletons.push(Skeleton::parse(body).unwrap());
+                } else if wanted.contains(&(fname.clone(), k, o.id)) {
+                    let m = anvil_formats::shaunwhite::mesh::StoredMesh::parse(body).unwrap();
+                    let palettes = m.compiled.palettes(body).unwrap();
+                    meshes.insert((fname.clone(), k, o.id), (m, palettes));
+                }
+            }
+        }
+    }
+    assert_eq!(meshes.len(), wanted.len());
+    let first_frame: BTreeMap<(String, usize, u32), u32> =
+        draws.keys().fold(BTreeMap::new(), |mut m, (f, e, id, frame, _)| {
+            let x = m.entry((f.clone(), *e, *id)).or_insert(*frame);
+            *x = (*x).min(*frame);
+            m
+        });
+    let (mut pairs, mut placed, mut first_pairs, mut entries) = (0usize, 0usize, 0usize, 0usize);
+    for ((forge, entry, id, frame, range), bones) in &draws {
+        let (mesh, palettes) = &meshes[&(forge.clone(), *entry, *id)];
+        let bind = |e: usize| -> M4 {
+            let m = mesh.bones[usize::from(palettes[*range].bones[e])]
+                .matrix
+                .map(f64::from);
+            std::array::from_fn(|i| std::array::from_fn(|j| m[4 * j + i]))
+        };
+        for (e, crc, _) in bones {
+            assert_eq!(mesh.bones[usize::from(palettes[*range].bones[*e])].name, *crc);
+            entries += 1;
+        }
+        let names: std::collections::BTreeSet<u32> = bones.iter().map(|b| b.1).collect();
+        // the Skeleton whose bones place most of the draw's children
+        let score = |s: &Skeleton| -> (usize, usize) {
+            let (mut n, mut ok) = (0, 0);
+            for (e, crc, sc) in bones {
+                let c = s.bones.iter().find(|b| b.name == *crc).unwrap();
+                let Some(p) = c.parent.and_then(|p| s.bones.iter().find(|b| b.id == p)) else {
+                    continue;
+                };
+                let Some((pe, _, sp)) = bones.iter().find(|b| b.1 == p.name) else {
+                    continue;
+                };
+                let l = mul4(&mul4(&mul4(&bind(*pe), &inv4(sp)), sc), &inv4(&bind(*e)));
+                n += 1;
+                ok += usize::from((0..3).all(|i| (l[i][3] - f64::from(c.local_position[i])).abs() < 1e-3));
+            }
+            (n, ok)
+        };
+        let (n, ok) = skeletons
+            .iter()
+            .filter(|s| names.iter().all(|c| s.bones.iter().any(|b| b.name == *c)))
+            .map(score)
+            .max_by_key(|&(n, ok)| (ok, n))
+            .unwrap_or_else(|| panic!("{forge}: mesh {id}: no Skeleton holds the draw's bones"));
+        pairs += n;
+        placed += ok;
+        if first_frame[&(forge.clone(), *entry, *id)] == *frame {
+            assert_eq!(ok, n, "{forge}: mesh {id} frame {frame} range {range}");
+            first_pairs += n;
+        }
+    }
+    println!(
+        "{} skinned draws, {entries} palette entries; {placed} of {pairs} child bones at their stored local position, all {first_pairs} in each mesh's first frame",
+        draws.len()
+    );
+    assert!(first_pairs > 0);
+}
