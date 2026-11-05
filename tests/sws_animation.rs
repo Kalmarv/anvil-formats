@@ -3,6 +3,7 @@
 //! ending on their length, the sets' pairs naming clips and the tracks' first keys measured against the bind pose of
 //! the bones they name.
 mod inputs;
+mod skinning;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -313,4 +314,147 @@ fn every_real_animation_and_anim_set_reads() {
     assert!(n["clips"] > 0 && n["sets"] > 0);
     assert_eq!(n["pairs naming two clips"], n["pairs"]);
     assert_eq!(n["tracks ending on the length"] + 25, n["tracks"]);
+}
+
+/// The tracks' value at `tick`: linear between the keys around it (rotations normalized, the second key's sign
+/// taken to the first's side), the first or last key outside them.
+fn sample<const N: usize>(times: &[u16], values: &[[f32; N]], tick: f64) -> [f64; N] {
+    let at = times.partition_point(|&t| f64::from(t) <= tick);
+    let widen = |v: &[f32; N]| v.map(f64::from);
+    if at == 0 {
+        return widen(&values[0]);
+    }
+    if at == times.len() {
+        return widen(&values[at - 1]);
+    }
+    let (a, b) = (widen(&values[at - 1]), widen(&values[at]));
+    let u = (tick - f64::from(times[at - 1])) / f64::from(times[at] - times[at - 1]);
+    let flip = if N == 4 && a.iter().zip(&b).map(|(x, y)| x * y).sum::<f64>() < 0.0 {
+        -1.0
+    } else {
+        1.0
+    };
+    let mut v: [f64; N] = std::array::from_fn(|i| a[i] + (flip * b[i] - a[i]) * u);
+    if N == 4 {
+        let n = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+        v = v.map(|x| x / n);
+    }
+    v
+}
+
+/// A clip's decoded tracks by bone: rotations and translations with their key times.
+type Decoded = (
+    BTreeMap<u32, (Vec<u16>, Vec<[f32; 4]>, u8)>,
+    BTreeMap<u32, (Vec<u16>, Vec<[f32; 3]>, u8)>,
+);
+
+fn decoded(a: &Animation) -> Decoded {
+    let (mut rot, mut tr) = (BTreeMap::new(), BTreeMap::new());
+    for (bone, t) in a.bone_tracks() {
+        match t.values().expect("the census reads every track's values") {
+            Values::Rotations(q) => {
+                rot.insert(bone, (t.times.clone(), q, t.kind()));
+            }
+            Values::Translations(p) => {
+                tr.insert(bone, (t.times.clone(), p, t.kind()));
+            }
+            _ => {}
+        }
+    }
+    (rot, tr)
+}
+
+/// The renderer's bone matrices are the decoded clips: for a traced skinned frame (the `runtime` oracle), one stored
+/// clip, sampled at a whole tick, gives every traced local rotation of the frame's child bones (1 − |dot| ≤ 1e-6) and
+/// every traced local translation of the bones it has a translation track for (≤ 0.1 mm). Frames whose bones the
+/// loaded clips don't animate (the bind pose, or a clip that isn't stored) are counted, not refused.
+#[test]
+fn traced_skinned_frames_are_decoded_clip_poses() {
+    let (Some(folder), Some(table)) = (
+        install(Game::ShaunWhite),
+        inputs::oracle(inputs::OracleSet::Runtime, Game::ShaunWhite, "skin.tsv"),
+    ) else {
+        return;
+    };
+    let draws = skinning::draws(&table);
+    let data = skinning::install(&folder, &draws, true);
+    // each traced (mesh, frame): its child bones' local transforms, over all its draw ranges
+    let mut frames: BTreeMap<(String, usize, u32, u32), BTreeMap<u32, skinning::M4>> = BTreeMap::new();
+    for d in &draws {
+        let (mesh, palettes) = &data.meshes[&(d.forge.clone(), d.entry, d.mesh)];
+        for l in skinning::locals(d, mesh, palettes, &data.skeletons).unwrap() {
+            frames
+                .entry((d.forge.clone(), d.entry, d.mesh, d.frame))
+                .or_default()
+                .insert(l.bone, l.traced);
+        }
+    }
+    let mut cache: BTreeMap<u32, Decoded> = BTreeMap::new();
+    let (mut reproduced, mut kinds) = (0usize, BTreeSet::new());
+    for ((forge, _, mesh, frame), bones) in &frames {
+        let mut best: Option<(f64, f64, u32, u32)> = None;
+        for a in &data.animations {
+            if !bones
+                .keys()
+                .all(|b| a.bone_tracks().any(|(m, t)| m == *b && t.is_rotation()))
+            {
+                continue;
+            }
+            let (rot, tr) = cache.entry(a.id).or_insert_with(|| decoded(a));
+            let last = rot
+                .values()
+                .filter_map(|(t, _, _)| t.last())
+                .max()
+                .copied()
+                .unwrap_or(0);
+            for tick in 0..=last {
+                let tick = f64::from(tick);
+                let mut r = 0f64;
+                for (b, m) in bones {
+                    let (times, q, _) = &rot[b];
+                    let s = sample(times, q, tick);
+                    let t = skinning::rotation(m);
+                    r = r.max(1.0 - s.iter().zip(t).map(|(x, y)| x * y).sum::<f64>().abs());
+                }
+                if best.is_some_and(|b| b.0 <= r) {
+                    continue;
+                }
+                let mut d = 0f64;
+                for (b, m) in bones {
+                    if let Some((times, p, _)) = tr.get(b) {
+                        let s = sample(times, p, tick);
+                        d = d.max((0..3).map(|i| (s[i] - m[i][3]).abs()).fold(0.0, f64::max));
+                    }
+                }
+                best = Some((r, d, a.id, tick as u32));
+            }
+        }
+        let Some((r, d, clip, tick)) = best else {
+            println!(
+                "{forge}: mesh {mesh} frame {frame}: no stored clip animates its {} bones",
+                bones.len()
+            );
+            continue;
+        };
+        let ok = r <= 1e-6 && d <= 1e-4;
+        println!(
+            "{forge}: mesh {mesh} frame {frame}: clip {clip} tick {tick}: rotation 1-|dot| {r:.1e}, translation {d:.1e} m{}",
+            if ok { "" } else { " (not this clip)" }
+        );
+        if ok {
+            reproduced += 1;
+            let (rot, tr) = &cache[&clip];
+            for b in bones.keys() {
+                kinds.insert(("rotation", rot[b].2));
+                if let Some(t) = tr.get(b) {
+                    kinds.insert(("translation", t.2));
+                }
+            }
+        }
+    }
+    println!(
+        "{reproduced} of {} traced frames reproduced by a decoded clip; track kinds: {kinds:?}",
+        frames.len()
+    );
+    assert!(reproduced >= 4);
 }
