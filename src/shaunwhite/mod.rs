@@ -1,8 +1,8 @@
 //! Shaun White Skateboarding (PC): the records its version-26 forges store, read from the objects of an entry
 //! ([`crate::objects`]): scene entities and their components ([`scene`]), collision shapes ([`collision`]), spawn
-//! markers ([`markers`]), grind guidance ([`guidance`]), lights and the sky's settings ([`light`]), meshes ([`mesh`]), materials
-//! ([`material`], [`shader_material`]), textures ([`texture`]), and the SDB2 shader databases shipped beside the forges
-//! ([`shaders`]).
+//! markers ([`markers`]), grind guidance ([`guidance`]), lights and the sky's settings ([`light`]), meshes ([`mesh`]),
+//! skeletons ([`skeleton`]), materials ([`material`], [`shader_material`]), textures ([`texture`]), and the SDB2 shader
+//! databases shipped beside the forges ([`shaders`]).
 
 pub mod collision;
 pub mod guidance;
@@ -13,4 +13,5 @@ pub mod mesh;
 pub mod scene;
 pub mod shader_material;
 pub mod shaders;
+pub mod skeleton;
 pub mod texture;

@@ -6,6 +6,7 @@
 - `shaunwhite::texture` reads Shaun White Skateboarding TextureMaps strictly (`StoredTextureMap::parse`) and slices their mip levels by face and level (`levels`); `storage` and `d3d_format` give a format code's block size and the Direct3D 9 format the game creates it with.
 - `shaunwhite::mesh` reads Shaun White Skateboarding Meshes: their MeshBones, the inline CompiledMesh's vertex streams, 16-bit indices, both draw-range partitions and bone palettes (`CompiledMesh::palettes`), the vertex layout the game declares (`CompiledMesh::layout`) and the material ids. It also reads the raw SubMeshes some meshes keep (`StoredMesh::sub_meshes`): each SubMesh's indices, per-triangle runs, positions, normals, colours, UV channels (`UvChannel`), morph channels (`MorphChannel`), material id and the copy it owns, so every Mesh of the game's data forges reads.
 - Breaking: `shaunwhite::mesh::Error::SubMeshes` is removed, since a mesh with SubMeshes now reads; a SubMesh copy nested too deep is `Error::Depth`.
+- `shaunwhite::skeleton` reads Shaun White Skateboarding Skeletons: the bones with their parents and bind pose (global and local position and rotation), orientation constraints, pose groups, IK and centre-of-mass data and mirror pairs; every Skeleton of the game's data forges reads, and its bind pose composes parent to child.
 - Tests: an `oracles.runtime` set compares both readers with what the game's own renderer uploaded and declared.
 - The README is rewritten; the real-data test setup moved to CONTRIBUTING.md.
 
