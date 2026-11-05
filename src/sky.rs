@@ -435,10 +435,47 @@ pub fn ambiance(body: &[u8]) -> Result<(u64, u64), Error> {
 mod tests {
     use super::*;
 
-    /// Radiance over a pseudo-random table, for directions that reach every edge of it, is what the original
-    /// clamped-array stencil gave, bit for bit (pinned as a digest of its 4,000 results).
+    /// The original clamped-array stencil `inscatter_sample` replaced: each axis's cell from a float floor, its
+    /// neighbour clamped to the table, the eight texels indexed directly.
+    fn reference_sample(table: &[u8], uvw: [f32; 3]) -> [f32; 4] {
+        let sizes = [32usize, 32, 16];
+        let coordinates = std::array::from_fn::<_, 3, _>(|axis| {
+            let value = (uvw[axis] * sizes[axis] as f32 - 0.5).clamp(0.0, (sizes[axis] - 1) as f32);
+            (value.floor() as usize, value - value.floor())
+        });
+        let mut encoded = [0.0f32; 4];
+        for z in 0..2 {
+            for y in 0..2 {
+                for x in 0..2 {
+                    let offsets = [x, y, z];
+                    let weight: f32 = (0..3)
+                        .map(|a| {
+                            if offsets[a] == 0 {
+                                1.0 - coordinates[a].1
+                            } else {
+                                coordinates[a].1
+                            }
+                        })
+                        .product();
+                    let p =
+                        std::array::from_fn::<_, 3, _>(|a| (coordinates[a].0 + offsets[a]).min(sizes[a] - 1));
+                    let at = ((p[2] * 32 + p[1]) * 32 + p[0]) * 8;
+                    for (lane, value) in encoded.iter_mut().enumerate() {
+                        let texel = at + lane * 2;
+                        *value += half(u16::from_le_bytes([table[texel], table[texel + 1]])) * weight;
+                    }
+                }
+            }
+        }
+        encoded
+    }
+
+    /// The inscatter sampler, over a pseudo-random table at 4,000 coordinates that reach past every edge of it, is
+    /// the original stencil bit for bit. Both are integer addressing and IEEE float arithmetic, so this holds on
+    /// every platform; `radiance`'s shading also calls the platform's `atan` and `powf`, whose last bits differ
+    /// between C runtimes, so its results are not pinned.
     #[test]
-    fn radiance_matches_the_reference_stencil() {
+    fn inscatter_sampling_matches_the_reference_stencil() {
         let mut state = 0x1234_5678u32;
         let mut next = move || {
             state ^= state << 13;
@@ -447,7 +484,7 @@ mod tests {
             state
         };
         // finite positive half floats (exponent 1 to 29)
-        let inscatter = (0..65_536 * 4)
+        let inscatter: Vec<u8> = (0..65_536 * 4)
             .flat_map(|_| {
                 let bits = (next() % 0x7400 + 0x0400) as u16;
                 bits.to_le_bytes()
@@ -462,17 +499,14 @@ mod tests {
             sun_depth: vec![],
             sun_irradiance: vec![],
         };
-        let mut unit = || (next() % 20_001) as f32 / 10_000.0 - 1.0;
-        let mut digest = 0xcbf2_9ce4_8422_2325u64;
+        // -0.1 to 1.1: below, inside and above the table on each axis
+        let mut coordinate = || (next() % 12_001) as f32 / 10_000.0 - 0.1;
         for _ in 0..4000 {
-            let direction = [unit(), unit(), unit()];
-            let sun = [unit(), unit(), unit()];
-            let mie = [unit() * 0.9, unit() * 0.9, (unit() + 1.0) / 2.0];
-            for bits in key.radiance(direction, sun, mie).unwrap().map(f32::to_bits) {
-                digest = (digest ^ u64::from(bits)).wrapping_mul(0x0100_0000_01b3);
-            }
+            let uvw = [coordinate(), coordinate(), coordinate()];
+            let sampled = key.inscatter_sample(uvw).unwrap().map(f32::to_bits);
+            let reference = reference_sample(&key.inscatter, uvw).map(f32::to_bits);
+            assert_eq!(sampled, reference, "at {uvw:?}");
         }
-        assert_eq!(digest, 0xe1db_3276_3132_318d);
     }
 
     #[test]
