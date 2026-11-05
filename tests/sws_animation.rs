@@ -365,9 +365,10 @@ fn decoded(a: &Animation) -> Decoded {
 }
 
 /// The renderer's bone matrices are the decoded clips: for a traced skinned frame (the `runtime` oracle), one stored
-/// clip, sampled at a whole tick, gives every traced local rotation of the frame's child bones (1 − |dot| ≤ 1e-6) and
+/// clip, sampled at the frame's time (to a hundredth of a tick), gives every traced local rotation of the frame's child bones (1 − |dot| ≤ 1e-6) and
 /// every traced local translation of the bones it has a translation track for (≤ 0.1 mm). Frames whose bones the
-/// loaded clips don't animate (the bind pose, or a clip that isn't stored) are counted, not refused.
+/// loaded clips don't animate (the bind pose, a blend or a clip that isn't stored) are counted, not refused. The
+/// reproduced frames use rotation kinds 5 and 6 and translation kinds 8 and 9.
 #[test]
 fn traced_skinned_frames_are_decoded_clip_poses() {
     let (Some(folder), Some(table)) = (
@@ -392,7 +393,7 @@ fn traced_skinned_frames_are_decoded_clip_poses() {
     let mut cache: BTreeMap<u32, Decoded> = BTreeMap::new();
     let (mut reproduced, mut kinds) = (0usize, BTreeSet::new());
     for ((forge, _, mesh, frame), bones) in &frames {
-        let mut best: Option<(f64, f64, u32, u32)> = None;
+        let mut best: Option<(f64, f64, u32, f64)> = None;
         for a in &data.animations {
             if !bones
                 .keys()
@@ -407,27 +408,43 @@ fn traced_skinned_frames_are_decoded_clip_poses() {
                 .max()
                 .copied()
                 .unwrap_or(0);
-            for tick in 0..=last {
-                let tick = f64::from(tick);
-                let mut r = 0f64;
-                for (b, m) in bones {
-                    let (times, q, _) = &rot[b];
-                    let s = sample(times, q, tick);
-                    let t = skinning::rotation(m);
-                    r = r.max(1.0 - s.iter().zip(t).map(|(x, y)| x * y).sum::<f64>().abs());
-                }
-                if best.is_some_and(|b| b.0 <= r) {
-                    continue;
-                }
-                let mut d = 0f64;
-                for (b, m) in bones {
-                    if let Some((times, p, _)) = tr.get(b) {
-                        let s = sample(times, p, tick);
-                        d = d.max((0..3).map(|i| (s[i] - m[i][3]).abs()).fold(0.0, f64::max));
-                    }
-                }
-                best = Some((r, d, a.id, tick as u32));
+            let score = |tick: f64| -> f64 {
+                bones
+                    .iter()
+                    .map(|(b, m)| {
+                        let (times, q, _) = &rot[b];
+                        let t = skinning::rotation(m);
+                        1.0 - sample(times, q, tick)
+                            .iter()
+                            .zip(t)
+                            .map(|(x, y)| x * y)
+                            .sum::<f64>()
+                            .abs()
+                    })
+                    .fold(0.0, f64::max)
+            };
+            // whole ticks, then hundredths of a tick around the best: a frame falls between ticks
+            let whole = (0..=last)
+                .map(f64::from)
+                .min_by(|&x, &y| score(x).total_cmp(&score(y)))
+                .unwrap_or(0.0);
+            let tick = (-100..=100)
+                .map(|k| whole + f64::from(k) / 100.0)
+                .filter(|&t| t >= 0.0)
+                .min_by(|&x, &y| score(x).total_cmp(&score(y)))
+                .unwrap_or(whole);
+            let r = score(tick);
+            if best.is_some_and(|b| b.0 <= r) {
+                continue;
             }
+            let mut d = 0f64;
+            for (b, m) in bones {
+                if let Some((times, p, _)) = tr.get(b) {
+                    let s = sample(times, p, tick);
+                    d = d.max((0..3).map(|i| (s[i] - m[i][3]).abs()).fold(0.0, f64::max));
+                }
+            }
+            best = Some((r, d, a.id, tick));
         }
         let Some((r, d, clip, tick)) = best else {
             println!(
@@ -437,24 +454,51 @@ fn traced_skinned_frames_are_decoded_clip_poses() {
             continue;
         };
         let ok = r <= 1e-6 && d <= 1e-4;
+        let (rot, tr) = &cache[&clip];
+        // the kinds of the tracks that drive the frame's bones, and the bones the clip leaves off at that time
+        let mut used = BTreeSet::new();
+        let mut off = 0usize;
+        for (b, m) in bones {
+            used.insert(("rotation", rot[b].2));
+            let s = sample(&rot[b].0, &rot[b].1, tick);
+            off += usize::from(
+                1.0 - s
+                    .iter()
+                    .zip(skinning::rotation(m))
+                    .map(|(x, y)| x * y)
+                    .sum::<f64>()
+                    .abs()
+                    > 1e-6,
+            );
+            if let Some(t) = tr.get(b) {
+                used.insert(("translation", t.2));
+            }
+        }
         println!(
-            "{forge}: mesh {mesh} frame {frame}: clip {clip} tick {tick}: rotation 1-|dot| {r:.1e}, translation {d:.1e} m{}",
-            if ok { "" } else { " (not this clip)" }
+            "{forge}: mesh {mesh} frame {frame}: clip {clip} tick {tick:.2}: rotation 1-|dot| {r:.1e}, translation {d:.1e} m, kinds {used:?}{}",
+            if ok {
+                String::new()
+            } else {
+                format!(" (not this clip: {off} of {} bones off)", bones.len())
+            }
         );
         if ok {
             reproduced += 1;
-            let (rot, tr) = &cache[&clip];
-            for b in bones.keys() {
-                kinds.insert(("rotation", rot[b].2));
-                if let Some(t) = tr.get(b) {
-                    kinds.insert(("translation", t.2));
-                }
-            }
+            kinds.extend(used);
         }
     }
     println!(
         "{reproduced} of {} traced frames reproduced by a decoded clip; track kinds: {kinds:?}",
         frames.len()
     );
-    assert!(reproduced >= 4);
+    // the train's four moving frames and the walking worker's twenty (legs and torso)
+    assert!(reproduced >= 24, "{reproduced}");
+    for k in [
+        ("rotation", 5),
+        ("rotation", 6),
+        ("translation", 8),
+        ("translation", 9),
+    ] {
+        assert!(kinds.contains(&k), "{k:?} not among {kinds:?}");
+    }
 }

@@ -76,7 +76,7 @@ primase_testdata::inputs! {
         Query::Oracle(OracleSet::Runtime, Game::ShaunWhite, "skin.tsv") => {
             status: Live,
             gate: false,
-            about: r#"the bone matrices of every skinned draw the game made on the same route (40 draws of 6 meshes in frames 7199 to 7204): forge, entry, mesh id, frame, draw range, palette entry, the MeshBone's name CRC and the three constant registers of the vertex shader's `g_Bones` array that hold the bone (12 f32 as u32 hex); tests/sws_skeleton.rs, sws_animation.rs"#,
+            about: r#"the bone matrices of the skinned draws the game made on the same route (all 40 of frames 7199 to 7204, and those of every 20th frame from 8000 to 8180 of a longer run of the same route: 290 draws of 16 meshes, among them a train, pigeons and two walking people): forge, entry, mesh id, frame, draw range, palette entry, the MeshBone's name CRC and the three constant registers of the vertex shader's `g_Bones` array that hold the bone (12 f32 as u32 hex); tests/sws_skeleton.rs, sws_animation.rs"#,
             source: r#"the same resource trace: each skinned draw's vertex-shader float constants copied at the draw, its shader's constant table naming `g_Bones`, its vertex buffer matched to a stored mesh's stream and its index range to one of the mesh's draw ranges"#,
         },
     }
