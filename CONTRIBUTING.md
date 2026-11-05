@@ -11,10 +11,30 @@ cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 ```
 
-Tests that read a game's own files skip when the file is not configured, so these pass without any game installed.
-To run them, point `GAME_DATA` at a TOML file naming your installs (see the README, "Building and testing"); the inputs
-every test may ask for are listed in [tests/inputs/README.md](tests/inputs/README.md). A test that reads a new real file
-declares it in `tests/inputs/mod.rs` first; `tests/real_data_inputs.rs` checks the declarations and the generated table.
+Tests that read a game's own files skip when the file is not configured, printing one line that names the missing
+key, so these pass without any game installed. To run them, point `GAME_DATA` at a TOML file naming your installs:
+
+```toml
+[installs]
+riders     = 'D:/games/RidersRepublic'   # the folder holding the .forge files
+shaunwhite = 'D:/games/ShaunWhite'       # the folder holding the version-26 .forge files
+[oracles]
+root = 'D:/oracles'                      # optional: tables of what a game's own renderer loaded
+[scratch]
+root = 'D:/scratch'                      # optional: where tests write output
+[run]
+require = 'gate'                         # optional: fail on a missing required input instead of skipping
+```
+
+```sh
+GAME_DATA=path/to/game-data.toml cargo test --workspace
+```
+
+The file format is documented in [primase-testdata](https://github.com/Kalmarv/primase-testdata), a git dependency of
+the tests. The inputs every test may ask for are listed in [tests/inputs/README.md](tests/inputs/README.md). The real
+forges are large (Riders Republic's `DataPC_MAD_USNAT.forge` is 15.6 GB; its tests read about 163 MB of it). A test
+that reads a new real file declares it in `tests/inputs/mod.rs` first; `tests/real_data_inputs.rs` checks the
+declarations and the generated table. `tests/readme.rs` checks that the README's example is `examples/forge_listing.rs`.
 
 ## Conventions
 
