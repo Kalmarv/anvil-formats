@@ -336,9 +336,25 @@ fn every_real_animation_and_anim_set_reads() {
         e.1 += 1;
     }
     println!("{n:#?}\nfirst keys at the bind pose by kind (at it, of): {at_bind:?}");
-    assert!(n["clips"] > 0 && n["sets"] > 0);
-    assert_eq!(n["pairs naming two clips"], n["pairs"]);
-    assert_eq!(n["tracks ending on the length"] + 25, n["tracks"]);
+    // every pair names two clips; all but 25 tracks end on their clip's length; all but one layout word names one
+    // mapping list
+    assert_eq!(
+        n,
+        BTreeMap::from([
+            ("clips", 80_466),
+            ("clips with events", 30_345),
+            ("distinct clips", 2_708),
+            ("first keys of a bone no Skeleton has", 771_470),
+            ("layout words", 275),
+            ("layout words equal", 80_367),
+            ("layout words with one mapping list", 274),
+            ("pairs", 101_996),
+            ("pairs naming two clips", 101_996),
+            ("sets", 7_471),
+            ("tracks", 6_593_436),
+            ("tracks ending on the length", 6_593_411),
+        ])
+    );
     // the first keys at the bind pose, by kind (all 80,466 objects, a clip stored twice counted twice): pinned, so a
     // change to a decode shows. Kind 4's index bits read the other way round give 198,380 at a bind rotation.
     assert_eq!(
@@ -358,10 +374,23 @@ fn every_real_animation_and_anim_set_reads() {
     println!(
         "kind 4 consecutive keys whose index bits change, by the bits before and after (bit 15 of the first word, as 2, plus that of the second): (pairs, |dot| > 0.9) {changes:?}"
     );
-    assert_eq!(changes.len(), 12);
-    for (bits, (pairs, smooth)) in &changes {
-        assert!(*smooth * 10 >= *pairs * 9, "{bits:?}: {smooth} of {pairs}");
-    }
+    assert_eq!(
+        changes,
+        BTreeMap::from([
+            ([0, 1], (1_950, 1_927)),
+            ([0, 2], (442, 438)),
+            ([0, 3], (4_331, 4_289)),
+            ([1, 0], (1_819, 1_795)),
+            ([1, 2], (364, 350)),
+            ([1, 3], (4_282, 4_252)),
+            ([2, 0], (453, 447)),
+            ([2, 1], (356, 350)),
+            ([2, 3], (783, 761)),
+            ([3, 0], (4_156, 4_113)),
+            ([3, 1], (4_496, 4_445)),
+            ([3, 2], (842, 822)),
+        ])
+    );
 }
 
 /// Counts, by the stored bits that change, the consecutive keys of a kind 4 track (`values` as stored, `q` decoded)
@@ -442,7 +471,8 @@ fn decoded(a: &Animation) -> Decoded {
 /// - two walking characters' four meshes and two heads (59 frames): no stored clip gives any of their bones, of any
 ///   kind, at any time, with a bone a clip has no track for at its bind rotation, and those meshes' child bones lie up
 ///   to 2.4 m from their stored positions with no clip translating them (`tests/sws_skeleton.rs`). These are the 26
-///   frames whose nearest clip is one of kind 4, so kind 4 is not checked here.
+///   frames whose nearest clip is one of kind 4, so kind 4 is not checked here; its decode is checked against the
+///   game's own unpack instead (`packed_quat48`'s unit test).
 #[test]
 fn traced_skinned_frames_are_decoded_clip_poses() {
     let (Some(folder), Some(table)) = (

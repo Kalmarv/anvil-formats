@@ -225,7 +225,17 @@ fn every_real_skeleton_reads_and_its_bind_pose_composes() {
         }
     }
     println!("{skeletons} Skeletons, {bones} bones, {composed} composed from their parents; {parts:?}");
-    assert!(skeletons > 0 && composed > 0);
+    assert_eq!((skeletons, bones, composed), (521, 17_405, 16_884));
+    assert_eq!(
+        parts,
+        BTreeMap::from([
+            ("constraints", 574),
+            ("mirror pairs", 2_028),
+            ("pose groups", 6),
+            ("with COM", 131),
+            ("with IK", 131),
+        ])
+    );
 }
 
 /// The game skins with each bone's MeshBone matrix as the inverse bind (the `runtime` oracle's `g_Bones` registers
@@ -233,14 +243,14 @@ fn every_real_skeleton_reads_and_its_bind_pose_composes() {
 /// parent is in the same draw, the local translation the two bones' registers and MeshBone matrices give,
 /// `IB_p · S_p⁻¹ · S_c · IB_c⁻¹`, is the bone's stored local position in its Skeleton, unless something moves it.
 /// Each palette entry also names the MeshBone the oracle's row does. Of the trace's 6,170 such pairs, 2,876 are at
-/// their stored position, and the rest can't be:
+/// their stored position, and the test pins each mesh's count; the other 3,294 can't be:
 /// - in the first frame the trace meets them, every pair of the train, the five pigeons and the walking worker's legs
-///   is at its stored position, and every pigeon pair stays there in every frame; the test asserts these;
-/// - 704 pairs are bones a stored clip translates: the train's and the walking worker's, whose poses
-///   `traced_skinned_frames_are_decoded_clip_poses` checks against their clips' translations;
-/// - 2,550 pairs are on two walking characters' four meshes and two heads, up to 2.4 m from their stored positions
-///   with no clip translating those bones: no stored clip poses those meshes (the same test), and what moves them is
-///   not known; 40 are the one train bone its clip does not drive.
+///   is at its stored position, and every pigeon pair and every pair of the worker's legs stays there in every frame;
+/// - 304 are the train's in its later frames and 40 the walking worker's torso's: bones their clips translate, whose
+///   poses `traced_skinned_frames_are_decoded_clip_poses` checks against those clips;
+/// - 2,950 are on two walking characters' four meshes and two heads, up to 2.4 m from their stored positions with no
+///   clip translating those bones: no stored clip poses those meshes (the same test), and what moves them is not
+///   known.
 #[test]
 fn skinned_draws_place_child_bones_at_their_stored_local_positions() {
     let (Some(folder), Some(table)) = (
@@ -260,6 +270,8 @@ fn skinned_draws_place_child_bones_at_their_stored_local_positions() {
     // each mesh's pairs in the first frame the trace meets it: (at their stored position, all)
     let mut first: BTreeMap<u32, (usize, usize)> = BTreeMap::new();
     let mut pigeons_off = 0usize;
+    // each mesh's pairs over all frames: (at their stored position, all)
+    let mut by_mesh: BTreeMap<u32, (usize, usize)> = BTreeMap::new();
     for d in &draws {
         let (mesh, palettes) = &data.meshes[&(d.forge.clone(), d.entry, d.mesh)];
         for (e, crc, _) in &d.bones {
@@ -271,6 +283,9 @@ fn skinned_draws_place_child_bones_at_their_stored_local_positions() {
         let ok = locals.iter().filter(|l| skinning::at_rest_position(l)).count();
         pairs += locals.len();
         placed += ok;
+        let m = by_mesh.entry(d.mesh).or_default();
+        m.0 += ok;
+        m.1 += locals.len();
         if first_frame[&(d.forge.as_str(), d.entry, d.mesh)] == d.frame {
             let f = first.entry(d.mesh).or_default();
             f.0 += ok;
@@ -287,19 +302,39 @@ fn skinned_draws_place_child_bones_at_their_stored_local_positions() {
         .collect();
     println!(
         "{} skinned draws, {entries} palette entries; {placed} of {pairs} child bones at their stored local position; \
-         by mesh, its first frame's pairs at their stored position (of all) {first:?}",
+         by mesh, its first frame's pairs at their stored position (of all) {first:?}; over all frames {by_mesh:?}",
         draws.len()
     );
     let mut expected = BTreeSet::from(PIGEONS);
     expected.extend([TRAIN, WORKER_LEGS]);
     assert_eq!(at_rest, expected);
     assert_eq!(pigeons_off, 0);
+    assert_eq!((placed, pairs, entries, draws.len()), (2_876, 6_170, 9_342, 290));
+    let mut by_mesh_expected = BTreeMap::from(PIGEONS.map(|m| (m, (144, 144))));
+    by_mesh_expected.extend([
+        (TRAIN, (96, 400)),
+        (WORKER_LEGS, (200, 200)),
+        (WORKER_TORSO, (680, 720)),
+        // the two walking characters' meshes and heads
+        (1_989_506_864, (240, 720)),
+        (1_989_506_917, (580, 1_800)),
+        (2_023_682_926, (120, 540)),
+        (2_023_683_399, (200, 900)),
+        (2_178_461_551, (20, 80)),
+        (2_349_895_832, (20, 90)),
+        // drawn with no parent-child pair in one draw
+        (2_801_323_886, (0, 0)),
+        (2_932_375_590, (0, 0)),
+    ]);
+    assert_eq!(by_mesh, by_mesh_expected);
 }
 
 /// The traced train's skinned mesh.
 const TRAIN: u32 = 2_445_827_479;
 /// The traced walking worker's legs.
 const WORKER_LEGS: u32 = 2_881_073_162;
+/// The traced walking worker's torso.
+const WORKER_TORSO: u32 = 2_881_073_252;
 /// The five traced pigeons' skinned meshes.
 const PIGEONS: [u32; 5] = [
     1_814_156_304,

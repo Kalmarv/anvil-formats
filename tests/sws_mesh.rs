@@ -533,5 +533,5 @@ fn buffers_and_layouts_equal_what_the_game_uploads() {
             .collect::<std::collections::BTreeSet<_>>()
             .len()
     );
-    assert!(buffers > 0 && declarations > 0);
+    assert_eq!((buffers, declarations), (615, 124));
 }
