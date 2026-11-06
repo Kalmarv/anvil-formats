@@ -2,7 +2,7 @@
 //! Riders Republic's forges for a Mesh's `MeshBone` records and skin stream against the bone names of the Skeletons.
 mod inputs;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use anvil_formats::archive::{Archive, At};
 use anvil_formats::entity::{BOUNDING_VOLUME, ComponentBody, Refusal, SKELETON_COMPONENT, StoredEntity};
@@ -148,6 +148,7 @@ fn open() -> Option<Archive> {
         "DataPC_MAD_USNAT.forge",
         "DataPC_MAD_USNAT_patch_01.forge",
         "DataPC_MAD_WhiteRoom.forge",
+        "DataPC_MAD_WhiteRoom_patch_01.forge",
     ];
     let paths: Vec<_> = forges.iter().map(|f| dir.join(f)).collect();
     Some(Archive::open(&paths).expect("archive"))
@@ -170,6 +171,14 @@ fn rows(archive: &Archive, kind: Kind) -> Vec<(At, String)> {
 }
 
 /// The bone records and skin streams of every Mesh with bones, against the bone names of every Skeleton.
+///
+/// All but 26 of the bone ids are some Skeleton's bone name. The 26 are 6 ids of three bike parts, each in all of the
+/// part's LODs (and in a patch's copy). No Skeleton of any of the six forges holds them, and a scan of every entry of
+/// up to 512 KiB of the six forges finds their bytes only in these meshes' own `MeshBone` records, in the LODSelectors of
+/// the two front forks (each level's u32 list: the mesh's three bone ids) and at a few offsets of GIDyn, TNLChunk
+/// and texture bodies with no bone record around them. Each record is read where the class id `MeshBone` puts it, so they are the data's ids,
+/// not a misread. The two forks' second and third bones and the EN frame's bone weight vertices: their bones are posed
+/// by no stored Skeleton. The CG frame's bone weights none and is stored `IsUsedBySubMeshes` false.
 #[test]
 fn every_mesh_bone_list_and_skin_stream_reads_and_its_ids_are_bone_names() {
     let Some(mut archive) = open() else {
@@ -183,7 +192,7 @@ fn every_mesh_bone_list_and_skin_stream_reads_and_its_ids_are_bone_names() {
     }
     let (mut meshes, mut ids, mut named, mut vertices) = (0u64, 0u64, 0u64, 0u64);
     let mut third_streams = 0u64;
-    let mut unnamed: HashSet<u32> = HashSet::new();
+    let mut unnamed: BTreeMap<u32, BTreeSet<String>> = BTreeMap::new();
     let mut by_influences: HashMap<usize, u64> = HashMap::new();
     for (at, name) in rows(&archive, Kind::Mesh) {
         let mesh = StoredMesh::parse(&archive.resource(at).expect("mesh").body)
@@ -205,7 +214,7 @@ fn every_mesh_bone_list_and_skin_stream_reads_and_its_ids_are_bone_names() {
             if names.contains(&b.bone_id) {
                 named += 1;
             } else {
-                unnamed.insert(b.bone_id);
+                unnamed.entry(b.bone_id).or_default().insert(name.clone());
             }
         }
         vertices += u64::try_from(skin.vertices().count()).expect("count");
@@ -213,13 +222,34 @@ fn every_mesh_bone_list_and_skin_stream_reads_and_its_ids_are_bone_names() {
     }
     println!(
         "{meshes} meshes with bones, {ids} bone ids of which {named} are the name of a bone of some Skeleton ({} ids \
-         are not), {vertices} skinned vertices, meshes by influences {by_influences:?}; {third_streams} meshes with a          third stream and no bones",
+         are not), {vertices} skinned vertices, meshes by influences {by_influences:?}; {third_streams} meshes with a \
+         third stream and no bones; the ids no Skeleton names, by mesh: {unnamed:?}",
         unnamed.len()
     );
     assert_eq!(meshes, 29_174);
     assert_eq!(ids, 497_194);
     assert_eq!(named, 497_168);
-    assert_eq!(unnamed.len(), 6);
+    let lods = |part: &str, lods: &[&str]| -> BTreeSet<String> {
+        lods.iter().map(|l| format!("{part}_{l}")).collect()
+    };
+    let fork = lods("MAD_CHR_CR_FrontFork_002_U", &["LOD0", "LOD1", "LOD2", "LODM"]);
+    let fork_a001 = lods(
+        "MAD_CHR_CR_FrontFork_002_U_A001",
+        &["LOD0", "LOD1", "LOD2", "LODM"],
+    );
+    let mut cg_frame = lods("MAD_CHR_CG_Frame_001_U_A002_D001", &["LOD0", "LOD1", "LOD2"]);
+    cg_frame.insert("MAD_CHR_CG_Frame_001_U_A002_LODM".to_owned());
+    assert_eq!(
+        unnamed,
+        BTreeMap::from([
+            (0x7338_2941, fork_a001.clone()),
+            (0x8B1F_0F77, fork.clone()),
+            (0x95B8_B852, cg_frame),
+            (0x9848_B7F9, lods("MAD_CHR_EN_Frame_007_U_A002", &["LODM"])),
+            (0xCD66_87E8, fork_a001),
+            (0xF8F2_2F0D, fork),
+        ])
+    );
     assert_eq!(vertices, 39_795_423);
     assert_eq!(by_influences, HashMap::from([(4, 29_116), (8, 58)]));
 }

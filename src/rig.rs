@@ -3,7 +3,8 @@
 //!
 //! A bone is named by the CRC-32 of its name ([`crate::skeleton::StoredBone::name_hash`]), and a Mesh's bone record (`MeshBone`) names
 //! its bone the same way ([`StoredMeshBone::bone_id`]): 497,168 of the 497,194 ids of Riders Republic's 29,174 meshes
-//! with bones equal a bone of some Skeleton (tests/skin_binding.rs). So two Skeletons holding a bone of one name hold
+//! with bones equal a bone of some Skeleton (tests/skin_binding.rs; the other 26 are 6 ids of two front forks' and two
+//! frames' meshes that no Skeleton holds). So two Skeletons holding a bone of one name hold
 //! one joint. The character kit's addon Skeletons (`MAD_CHR_SkelAddon_*`) are made so: each starts at the main
 //! skeleton's root with copies of the bones above the part it adds (the 146 SkeletonComponents' addons share 1 or more
 //! bones with their main Skeleton), and adds the part's own below them.

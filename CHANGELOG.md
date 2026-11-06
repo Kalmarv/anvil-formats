@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1 (2026-11-06)
+
+- Tests: the Riders Republic skin census reads all six forges and names the 26 mesh bone ids that are no Skeleton's
+  bone: 6 ids of two front forks' and two frames' meshes, each in all of the part's LODs. No Skeleton of the six forges
+  holds them, and their bytes are found only in those meshes' bone records and the forks' LODSelectors. They are the
+  data's ids, not a misread. Before, the test counted 6 such ids without saying which.
+
 ## 0.4.0 (2026-11-06)
 
 - `prefetch` reads a forge's `PrefetchingFileInfos` entry (`PrefetchingFileInfos::read`, `parse`, `get`): a record
