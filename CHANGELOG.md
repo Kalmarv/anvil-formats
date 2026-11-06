@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 (2026-11-06)
+
+- `prefetch` reads a forge's `PrefetchingFileInfos` entry (`PrefetchingFileInfos::read`, `parse`, `get`): a record
+  for every other entry of the forge, each its groups of members and the entries it lists, as stored. All six Riders
+  Republic forges end with one (163,354 records in `DataPC.forge`, 767,461 in `DataPC_MAD_USNAT.forge`); every record
+  reads to its size and every id in it is the index id of an entry of the six forges. Before, these six entries were
+  refused ("compression version 2, algorithm 0").
+- `data` reads compression version 2 with algorithm 0 as LZO1X (`ALGORITHM_LZO1X`): every chunk of those six entries
+  matches its checksum and decodes to exactly its stated size. `read_stream_to_end` reads a streamed block whose chunks
+  run to the end of the bytes, as those entries hold one with no metadata block before it.
+
 ## 0.3.1 (2026-11-06)
 
 - `shaunwhite::animation` decodes kind 4 (48-bit) rotations as Shaun White Skateboarding's own unpack does

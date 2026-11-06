@@ -11,7 +11,8 @@
 //!
 //! - **Containers.** A `.forge` archive of version 26 or 27 ([`forge`]): its index, each entry's offset, size and
 //!   ids as stored, and each entry's name record. An entry's data blocks ([`data`]): compression version 2 (zstd) or
-//!   version 1 (LZO2A), the Adler-32 checksum checked, the resource's header parsed and its body kept as stored. Several
+//!   version 1 (LZO2A), the Adler-32 checksum checked, the resource's header parsed and its body kept as stored; a forge's
+//!   `PrefetchingFileInfos` entry, one LZO1X-streamed block of a record per entry ([`prefetch`]). Several
 //!   forges searched as one ([`archive`]), the entries listed by kind ([`listing`]), and the objects of a version-26
 //!   entry ([`objects`]).
 //! - **Resources.** The bodies the forges hold, each read into a record as stored: Entities and EntityGroups
@@ -84,6 +85,7 @@ pub mod mesh;
 pub mod mesh_shape;
 pub mod mip;
 pub mod objects;
+pub mod prefetch;
 pub mod reference;
 pub mod rider;
 pub mod rig;

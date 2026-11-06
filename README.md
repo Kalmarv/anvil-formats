@@ -9,6 +9,7 @@ A Rust library that reads the data files of Ubisoft's Anvil engine. It reads `.f
 - Reads `.forge` archives of version 26 (Shaun White Skateboarding) and version 27 (Riders Republic)
 - Lists the entries of one forge, or of several forges searched as one archive, from the index and name tables alone
 - Decompresses an entry's LZO2A or zstd data blocks and verifies their Adler-32 checksums
+- Reads each Riders Republic forge's PrefetchingFileInfos entry (LZO1X-streamed): the entries each entry lists
 - Reads Riders Republic meshes and decodes their vertex attributes as the engine's vertex declarations state them
 - Reads Riders Republic materials, texture sets, texture maps and mip levels
 - Reads Riders Republic material templates, their shader permutations and the DXBC containers of `ShaderDataDX11.bin`

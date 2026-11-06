@@ -10,15 +10,21 @@
 //!   bytes.
 //!
 //! Read here: version 2, algorithm 5 (zstd: established on Mesh resources and a three-chunk CompiledMip, Riders
-//! Republic build 25394987), and version 1, algorithm 2 (LZO2A: every chunk of Shaun White Skateboarding's PC forges,
-//! algorithm 2 as AnvilToolkit maps it for the Assassin's Creed 2 era); a chunk whose stored size equals its decoded
-//! size is stored raw. The block's data is its
+//! Republic build 25394987), version 2, algorithm 0 (LZO1X: every chunk of the six Riders Republic forges'
+//! `PrefetchingFileInfos` entries, streamed blocks, each checksum matching and each chunk decoding to exactly its stated
+//! size), and version 1, algorithm 2 (LZO2A: every chunk of Shaun White Skateboarding's PC forges, algorithm 2 as
+//! AnvilToolkit maps it for the Assassin's Creed 2 era); a chunk whose stored size equals its decoded size is stored
+//! raw. The block's data is its
 //! chunks' decoded bytes in order. An entry is two consecutive blocks: a metadata block (16 bytes decoded, kept as
 //! stored) and the resource's. Anything else is refused, naming what it
 //! found. A forge's `GlobalMetaFile` entry has no block magic: it is not data blocks, and is refused as such.
 //!
-//! A streamed block ([`read_stream`]: Shaun White Skateboarding's compressed shader databases) has the same magic and
-//! compression info but no chunk count or table: each chunk carries its own sizes and checksum before its bytes.
+//! A streamed block has the same magic and compression info but no chunk count or table: each chunk carries its own
+//! sizes and checksum before its bytes. Shaun White Skateboarding's compressed shader databases hold one of a known
+//! decoded size ([`read_stream`]); a Riders Republic forge's `PrefetchingFileInfos` entry is one block alone, its chunks
+//! running to the entry's end ([`read_stream_to_end`], [`crate::prefetch`]). Observed on every block of both games: the
+//! second u16 after the algorithm has bit 15 set where the block has a chunk table (32768, 32772) and clear where it is
+//! streamed (0, 4).
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
@@ -26,7 +32,7 @@
 )]
 
 use primase_foundations::bytes::{Field, FieldError, View};
-use primase_foundations::compress::{Decompressor, Lzo2a, Zstd};
+use primase_foundations::compress::{Decompressor, Lzo1x, Lzo2a, Zstd};
 
 use crate::fields::LE;
 
@@ -36,8 +42,10 @@ pub const BLOCK_MAGIC: u64 = 0x1004_FA99_57FB_AA33;
 pub const VERSION: u16 = 2;
 /// The compression version read with LZO2A.
 pub const VERSION_1: u16 = 1;
-/// Version 2's algorithm read (zstd).
+/// Version 2's algorithm read with zstd.
 pub const ALGORITHM_ZSTD: u8 = 5;
+/// Version 2's algorithm read with LZO1X (miniLZO's format).
+pub const ALGORITHM_LZO1X: u8 = 0;
 /// Version 1's algorithm read (LZO2A).
 pub const ALGORITHM_LZO2A: u8 = 2;
 /// The checksum's starting value.
@@ -66,10 +74,10 @@ pub enum Error {
         /// The compression version found.
         version: u16,
     },
-    /// The version and algorithm byte (offset 10) are not a pair read: version 2 with 5 (zstd) or version 1
-    /// with 2 (LZO2A).
+    /// The version and algorithm byte (offset 10) are not a pair read: version 2 with 5 (zstd) or 0 (LZO1X), or
+    /// version 1 with 2 (LZO2A).
     #[error(
-        "block at {at}: compression version {version}, algorithm {algorithm}: only 2 with 5 (zstd) and 1 with 2 (LZO2A) are read"
+        "block at {at}: compression version {version}, algorithm {algorithm}: only 2 with 5 (zstd) or 0 (LZO1X) and 1 with 2 (LZO2A) are read"
     )]
     Algorithm {
         /// The offset of the block in the entry.
@@ -168,11 +176,13 @@ pub struct Chunk {
 /// One data block as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
-    /// The compression version (u16 at offset 8): 2 for zstd, 1 for LZO2A.
+    /// The compression version (u16 at offset 8): 2 for zstd and LZO1X, 1 for LZO2A.
     pub version: u16,
-    /// The compression algorithm byte (offset 10): 5 for zstd, 2 for LZO2A.
+    /// The compression algorithm byte (offset 10): 5 for zstd, 0 for LZO1X, 2 for LZO2A.
     pub algorithm: u8,
-    /// The two u16 after the algorithm (observed 0 and 32772).
+    /// The two u16 after the algorithm, as stored (observed 0 and 32772 in Riders Republic's blocks with a chunk
+    /// table, 0 and 4 in its streamed ones, 32768 and 32768 in Shaun White Skateboarding's with a table, 32768 and 0 in
+    /// its streamed ones).
     pub unknown: [u16; 2],
     /// The block's chunk table, in stored order.
     pub chunks: Vec<Chunk>,
@@ -349,6 +359,7 @@ fn info(bytes: &[u8], at: usize) -> Result<Info, Error> {
     let algorithm = View::new(bytes).u8(info(10)).field("compression algorithm")?;
     let decoder: &'static dyn Decompressor = match (version, algorithm) {
         (VERSION, ALGORITHM_ZSTD) => &Zstd,
+        (VERSION, ALGORITHM_LZO1X) => &Lzo1x,
         (VERSION_1, ALGORITHM_LZO2A) => &Lzo2a,
         _ => {
             return Err(Error::Algorithm {
@@ -420,6 +431,45 @@ fn decode_chunk(
 /// the checksum as in a block), then its stored bytes; the chunks run until their decoded sizes reach
 /// `decoded_size`. A marker other than 1, or chunks whose decoded sizes pass `decoded_size`, are refused.
 pub fn read_stream(bytes: &[u8], at: usize, decoded_size: usize) -> Result<(Block, usize), Error> {
+    stream(bytes, at, Until::Decoded(decoded_size))
+}
+
+/// The streamed block at `at` in `bytes` whose chunks run to the end of `bytes` (a Riders Republic forge's
+/// `PrefetchingFileInfos` entry is one: version 2, algorithm 0, read by [`crate::prefetch`]), checked and decoded. Its
+/// chunks are laid out as [`read_stream`]'s; there is at least one, the last ends exactly at the end of `bytes`, and
+/// their decoded sizes together may not pass `max_decoded`.
+pub fn read_stream_to_end(bytes: &[u8], at: usize, max_decoded: usize) -> Result<Block, Error> {
+    stream(bytes, at, Until::End(max_decoded)).map(|(block, _)| block)
+}
+
+/// Where a streamed block's chunks stop.
+#[derive(Clone, Copy)]
+enum Until {
+    /// Once their decoded sizes reach this.
+    Decoded(usize),
+    /// At the end of the bytes, their decoded sizes no more than this in all.
+    End(usize),
+}
+
+impl Until {
+    /// Whether another chunk follows, `decoded` bytes decoded so far and the next one at `cursor` of `len`.
+    fn more(self, decoded: usize, cursor: usize, len: usize) -> bool {
+        match self {
+            Until::Decoded(size) => decoded < size,
+            Until::End(_) => cursor < len,
+        }
+    }
+
+    /// The most the chunks may decode to in all.
+    fn bound(self) -> usize {
+        match self {
+            Until::Decoded(size) | Until::End(size) => size,
+        }
+    }
+}
+
+/// A streamed block's chunks read from `at` until `until`, checked and decoded, and where they end.
+fn stream(bytes: &[u8], at: usize, until: Until) -> Result<(Block, usize), Error> {
     let Info {
         version,
         algorithm,
@@ -427,10 +477,17 @@ pub fn read_stream(bytes: &[u8], at: usize, decoded_size: usize) -> Result<(Bloc
         decoder,
     } = info(bytes, at)?;
     let mut cursor = at.checked_add(STREAM_HEADER).ok_or(Error::Overflow("stream"))?;
+    if matches!(until, Until::End(_)) && cursor >= bytes.len() {
+        return Err(Error::Chunks {
+            at,
+            count: 0,
+            why: "a block holds at least one",
+        });
+    }
     let mut chunks = Vec::new();
     // grown chunk by chunk, so a stated size the chunks don't back allocates nothing
     let mut data = Vec::new();
-    while data.len() < decoded_size {
+    while until.more(data.len(), cursor, bytes.len()) {
         let k = chunks.len();
         let marker = View::new(bytes).u8(cursor).field("chunk marker")?;
         if marker != STREAM_MARKER {
@@ -442,7 +499,7 @@ pub fn read_stream(bytes: &[u8], at: usize, decoded_size: usize) -> Result<(Bloc
             decoded_size: field(5, "chunk decoded size")?,
             checksum: field(9, "chunk checksum")?,
         };
-        let remaining = decoded_size.saturating_sub(data.len());
+        let remaining = until.bound().saturating_sub(data.len());
         if usize::try_from(chunk.decoded_size).map_or(true, |d| d > remaining) {
             return Err(Error::Size {
                 at,

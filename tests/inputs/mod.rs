@@ -31,22 +31,40 @@ primase_testdata::inputs! {
         },
     }
     declared {
+        Query::Install(Game::Riders, Some("DataPC.forge")) => {
+            status: Live,
+            gate: false,
+            about: r#"Riders Republic's base forge (Steam build 25394987: `DataPC.forge`, 7,123,931,172 bytes, 163,356 entries): its tables and its PrefetchingFileInfos entry read; tests/prefetch.rs"#,
+            source: r#"the user's own install; the PrefetchingFileInfos layout worked out from all six forges' entries, every chunk's checksum matching and decoding to its stated size, every record ending at its size and every id it holds an index id of the forges"#,
+        },
+        Query::Install(Game::Riders, Some("DataPC_patch_01.forge")) => {
+            status: Live,
+            gate: false,
+            about: r#"the patch of installs.riders/DataPC.forge (Riders Republic, Steam build 25394987: `DataPC_patch_01.forge`, 937,196,599 bytes, 49,363 entries): its tables and its PrefetchingFileInfos entry read; tests/prefetch.rs"#,
+            source: r#"the user's own install; checked as installs.riders/DataPC.forge's PrefetchingFileInfos"#,
+        },
+        Query::Install(Game::Riders, Some("DataPC_MAD_USNAT_patch_01.forge")) => {
+            status: Live,
+            gate: false,
+            about: r#"the patch of installs.riders/DataPC_MAD_USNAT.forge (Riders Republic, Steam build 25394987: `DataPC_MAD_USNAT_patch_01.forge`, 1,331,014,794 bytes, 320,777 entries): its tables and its PrefetchingFileInfos entry read; tests/prefetch.rs"#,
+            source: r#"the user's own install; checked as installs.riders/DataPC.forge's PrefetchingFileInfos"#,
+        },
         Query::Install(Game::Riders, Some("DataPC_MAD_USNAT.forge")) => {
             status: Live,
             gate: false,
-            about: r#"a large Anvil forge of version 27 (Riders Republic, Steam build 25394987: `DataPC_MAD_USNAT.forge`, 15,650,919,308 bytes, 767,463 entries; its tables are read, about 163 MB); tests/mesh_shape.rs, and the shape and mesh tests of the Anvil world builder (https://github.com/Kalmarv/primase/tree/main/worlds/anvil/tests)"#,
+            about: r#"a large Anvil forge of version 27 (Riders Republic, Steam build 25394987: `DataPC_MAD_USNAT.forge`, 15,650,919,308 bytes, 767,463 entries; its tables are read, about 163 MB); tests/mesh_shape.rs, prefetch.rs, and the shape and mesh tests of the Anvil world builder (https://github.com/Kalmarv/primase/tree/main/worlds/anvil/tests)"#,
             source: r#"the user's own install; two MeshShape bodies' prefixes, section runs and tails hand-checked against a separate read-only decode of the file"#,
         },
         Query::Install(Game::Riders, Some("DataPC_MAD_WhiteRoom.forge")) => {
             status: Live,
             gate: false,
-            about: r#"the base forge of installs.riders/DataPC_MAD_WhiteRoom_patch_01.forge's patch (Riders Republic, Steam build 25394987: `DataPC_MAD_WhiteRoom.forge`, 8,951,822 bytes, 388 entries); tests/data.rs"#,
+            about: r#"the base forge of installs.riders/DataPC_MAD_WhiteRoom_patch_01.forge's patch (Riders Republic, Steam build 25394987: `DataPC_MAD_WhiteRoom.forge`, 8,951,822 bytes, 388 entries); tests/data.rs, prefetch.rs"#,
             source: r#"the user's own install; two resource blocks' sizes, checksums, names and class ids hand-checked against a separate read-only decode of the file"#,
         },
         Query::Install(Game::Riders, Some("DataPC_MAD_WhiteRoom_patch_01.forge")) => {
             status: Live,
             gate: false,
-            about: r#"one Anvil forge archive of version 27 (Riders Republic, Steam build 25394987: `DataPC_MAD_WhiteRoom_patch_01.forge`, 1,021,872 bytes, 337 entries); tests/forge.rs"#,
+            about: r#"one Anvil forge archive of version 27 (Riders Republic, Steam build 25394987: `DataPC_MAD_WhiteRoom_patch_01.forge`, 1,021,872 bytes, 337 entries); tests/forge.rs, prefetch.rs"#,
             source: r#"the user's own install; rows hand-checked against a separate read-only census of the file"#,
         },
         Query::Install(Game::ShaunWhite, Some("DataPC.forge")) => {
