@@ -1,5 +1,7 @@
 # anvil-formats
 
+[![crates.io: anvil-formats](https://img.shields.io/crates/v/anvil-formats?label=anvil-formats)](https://crates.io/crates/anvil-formats) [![docs.rs](https://img.shields.io/docsrs/anvil-formats)](https://docs.rs/anvil-formats) [![CI](https://img.shields.io/github/actions/workflow/status/Kalmarv/anvil-formats/ci.yml?branch=main&label=CI)](https://github.com/Kalmarv/anvil-formats/actions/workflows/ci.yml)
+
 A Rust library that reads the data files of Ubisoft's Anvil engine. It reads `.forge` archives and the resources stored in them for two games, Riders Republic and Shaun White Skateboarding.
 
 ## Features
