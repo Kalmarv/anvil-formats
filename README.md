@@ -34,12 +34,6 @@ Rust 1.99 or newer. To read anything real you need your own copy of the game; th
 cargo add anvil-formats
 ```
 
-The release on crates.io is 0.1.2. The Shaun White Skateboarding texture map, mesh, skeleton and animation readers (`shaunwhite::texture`, `shaunwhite::mesh`, `shaunwhite::skeleton`, `shaunwhite::animation`) are not released yet; to use them, depend on the repository instead:
-
-```sh
-cargo add anvil-formats --git https://github.com/Kalmarv/anvil-formats
-```
-
 ### Usage
 
 Count a forge's entries by kind, then read its first Mesh ([`examples/forge_listing.rs`](examples/forge_listing.rs)):

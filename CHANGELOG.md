@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-06)
 
 - `rider::RiderSlot::colours` names the colour table (`HAIR_COLOURS`, `BEARD_COLOURS`) whose rows are the variants of the hair and beard activator slots; it is `None` for the other slots.
 - `shaunwhite::texture` reads Shaun White Skateboarding TextureMaps strictly (`StoredTextureMap::parse`) and slices their mip levels by face and level (`levels`); `storage` and `d3d_format` give a format code's block size and the Direct3D 9 format the game creates it with.
