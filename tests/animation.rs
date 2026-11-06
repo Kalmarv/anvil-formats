@@ -204,7 +204,7 @@ fn the_values_and_times_of_every_track_of_a_kind_read_decode() {
         matched,
         BTreeMap::from([
             (3, (6_341, 34_228)),
-            (4, (1_493, 6_871)),
+            (4, (2_577, 6_871)),
             (5, (1_647, 76_364)),
             (7, (3_178, 17_817)),
             (8, (364, 1_019))
@@ -212,6 +212,6 @@ fn the_values_and_times_of_every_track_of_a_kind_read_decode() {
     );
     assert_eq!(
         near,
-        BTreeMap::from([(3, 12_538), (4, 1_967), (5, 22_324), (7, 4_022), (8, 439)])
+        BTreeMap::from([(3, 12_538), (4, 3_169), (5, 22_324), (7, 4_022), (8, 439)])
     );
 }

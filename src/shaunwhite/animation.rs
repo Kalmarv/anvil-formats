@@ -25,14 +25,13 @@
 //! tracks).
 //!
 //! The values of each kind ([`Track::values`]):
-//! - kind 4: a rotation in 48 bits, a smallest-three quaternion: three u16 words, the low 15 bits of each a component
-//!   kept, in the order of their components, as Riders Republic's kind 4 ([`crate::animation`]), but with the index of
-//!   the component left out stored the other way round: bit 15 of the first word its low bit, of the second its high
-//!   bit (0 x, 1 y, 2 z, 3 w). Bit 15 of the third word is 0 on every key. Told by the keys around a change of index
-//!   (24,274 consecutive pairs in the 2,708 distinct clips): read so, every one of the twelve kinds of change keeps
-//!   96% to 99% of its pairs within |dot| > 0.9 of each other, as keys of one index do (99.6% to 100%); with the two
-//!   bits read as Riders Republic's, the eight changes between index 0 or 3 and index 1 or 2 keep 1% to 24%. Not
-//!   checked against the game's own decode: no traced frame is a pose of a kind 4 clip (`tests/sws_animation.rs`);
+//! - kind 4: a rotation in 48 bits (the game's `PackedQuat48`), a smallest-three quaternion, decoded as the game's own
+//!   unpack does ([`packed_quat48`]): three u16 words, the low 15 bits of the first two and the third as an i16 the
+//!   components kept, in the order of their components, `v * f32(sqrt(2) / 32767) - f32(1 / sqrt(2))`; the index of
+//!   the component left out (0 x, 1 y, 2 z, 3 w) bit 15 of the first word its low bit, of the second its high bit, the
+//!   other way round from Riders Republic's kind 4 as [`crate::animation`] reads it; the left-out component the root
+//!   of what the others leave of 1, 0 where they leave less. Bit 15 of the third word is 0 on every key of the
+//!   install;
 //! - kind 5: a rotation in 64 bits, a smallest-three quaternion laid out as Riders Republic's kind 5; kind 6: the x,
 //!   y and z of a rotation as f32, w the positive root;
 //! - kind 8: a translation packed in a u32: x the top 11 bits (21 to 31), y the next 11 (10 to 20), z the low 10, each
@@ -54,7 +53,7 @@
 
 use primase_foundations::bytes::{Cursor, Field, FieldError};
 
-use crate::animation::{IndexOrder, quat_xyz, quat48, quat64};
+use crate::animation::{quat_xyz, quat64};
 use crate::fields::LE;
 
 pub use crate::animation::{ANIMATION, TIME_TICKS_PER_SECOND};
@@ -238,6 +237,46 @@ fn packed_translation(b: [u8; 4]) -> [f32; 3] {
     [field(21, 11), field(10, 11), field(0, 10)]
 }
 
+/// A kind 4 value, a `PackedQuat48`, as the game unpacks one: `sws.exe` (SHA-256 `c7eb65c8...8d35c4`) at 0x103F1D0,
+/// and at 0x103F340 the two keys around a time for the kind 4 track sampler, both with the same arithmetic: each
+/// component kept a double product with the f32 constant at 0x1967AE8 (`sqrt(2) / 32767` rounded to f32), rounded to
+/// f32, less 1/sqrt(2) as an f32, in double, rounded again; the left-out one `sqrt(max(0, 1 - a^2 - b^2 - c^2))`, the
+/// difference rounded to f32, the root taken in double and rounded. The index of the one left out is bit 15 of the
+/// second word, as 2, plus bit 15 of the first.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the game rounds each double step to f32; the casts are those roundings"
+)]
+pub fn packed_quat48(b: [u8; 6]) -> [f32; 4] {
+    const SCALE: f64 = f64::from_bits(0x3F06_A0CB_A000_0000);
+    let [a0, a1, b0, b1, c0, c1] = b;
+    let (w0, w1) = (u16::from_le_bytes([a0, a1]), u16::from_le_bytes([b0, b1]));
+    let unpack = |v: f64| {
+        let scaled = (v * SCALE) as f32;
+        (f64::from(scaled) - f64::from(std::f32::consts::FRAC_1_SQRT_2)) as f32
+    };
+    let kept = [
+        unpack(f64::from(w0 & 0x7FFF)),
+        unpack(f64::from(w1 & 0x7FFF)),
+        unpack(f64::from(i16::from_le_bytes([c0, c1]))),
+    ];
+    let rest = kept
+        .iter()
+        .fold(1.0f64, |rest, &c| rest - f64::from(c) * f64::from(c)) as f32;
+    let root = if f64::from(rest) > 0.0 {
+        f64::from(rest).sqrt() as f32
+    } else {
+        0.0
+    };
+    let [a, b, c] = kept;
+    match (w1 >> 15, w0 >> 15) {
+        (0, 0) => [root, a, b, c],
+        (0, _) => [a, root, b, c],
+        (_, 0) => [a, b, root, c],
+        _ => [a, b, c, root],
+    }
+}
+
 impl Track {
     /// The track's kind: the tag shifted right by 2.
     pub fn kind(&self) -> u8 {
@@ -266,16 +305,7 @@ impl Track {
     pub fn values(&self) -> Result<Values, Error> {
         let v = &self.values;
         Ok(match self.kind() {
-            4 => Values::Rotations(
-                v.as_chunks::<6>()
-                    .0
-                    .iter()
-                    .map(|b| {
-                        quat48(*b, IndexOrder::FirstLow)
-                            .map_err(|why| Error::Values(format!("a kind 4 value {why}")))
-                    })
-                    .collect::<Result<_, _>>()?,
-            ),
+            4 => Values::Rotations(v.as_chunks::<6>().0.iter().map(|b| packed_quat48(*b)).collect()),
             5 => Values::Rotations(
                 v.as_chunks::<8>()
                     .0
@@ -578,5 +608,73 @@ impl AnimSet {
             pairs,
             flag,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `packed_quat48` is the game's own unpack bit for bit: each row's rotation is what `sws.exe`'s function at
+    /// 0x103F1D0 wrote for the row's three words, run unmodified on the words (x86 emulation of the executable's
+    /// mapped sections; its two-key form at 0x103F340 writes the same for every pair of the first four rows). The rows
+    /// take every index of the left-out component, both ends of each word's range, a third word with bit 15 set (an
+    /// i16 to the game) and words whose components leave less than nothing of 1.
+    #[test]
+    fn packed_quat48_is_the_games_unpack() {
+        for (words, game) in [
+            (
+                [0x1234, 0x5678, 0x2345],
+                [0x3F433AF1, 0xBF018814, 0x3E7E3C18, 0xBEA2849B],
+            ),
+            (
+                [0x9234, 0x5678, 0x2345],
+                [0xBF018814, 0x3F433AF1, 0x3E7E3C18, 0xBEA2849B],
+            ),
+            (
+                [0x1234, 0xD678, 0x2345],
+                [0xBF018814, 0x3E7E3C18, 0x3F433AF1, 0xBEA2849B],
+            ),
+            (
+                [0x9234, 0xD678, 0x2345],
+                [0xBF018814, 0x3E7E3C18, 0xBEA2849B, 0x3F433AF1],
+            ),
+            (
+                [0xC000, 0xC000, 0x4000],
+                [0x37B50000, 0x37B50000, 0x37B50000, 0x3F800000],
+            ),
+            (
+                [0x0000, 0x0000, 0x0000],
+                [0x00000000, 0xBF3504F3, 0xBF3504F3, 0xBF3504F3],
+            ),
+            (
+                [0xFFFF, 0xFFFF, 0x7FFF],
+                [0x3F3504F3, 0x3F3504F3, 0x3F3504F3, 0x00000000],
+            ),
+            (
+                [0x7FFF, 0x0000, 0x3FFF],
+                [0x3940AC39, 0x3F3504F3, 0xBF3504F3, 0xB7B50000],
+            ),
+            (
+                [0x3A5C, 0xB1E7, 0x46D2],
+                [0xBD7F2F60, 0xBE1F7AC4, 0x3F7BA24B, 0x3D9A6000],
+            ),
+            (
+                [0x4000, 0x4000, 0xC000],
+                [0x00000000, 0x37B50000, 0x37B50000, 0xBFB505A8],
+            ),
+            (
+                [0x8001, 0x7FFE, 0x8000],
+                [0xBF35021F, 0x00000000, 0x3F35021F, 0xC007C46B],
+            ),
+            (
+                [0xE5A3, 0x9C40, 0x2B17],
+                [0x3ED4EC46, 0xBECA3A48, 0xBE6C8E78, 0x3F49329C],
+            ),
+        ] {
+            let [a, b, c] = words.map(u16::to_le_bytes);
+            let bytes = [a[0], a[1], b[0], b[1], c[0], c[1]];
+            assert_eq!(packed_quat48(bytes).map(f32::to_bits), game, "{words:04X?}");
+        }
     }
 }

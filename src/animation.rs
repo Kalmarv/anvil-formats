@@ -44,11 +44,14 @@
 //!   component left out, bits 20 to 29, 10 to 19 and 0 to 9 the three others in the order of their components, each
 //!   `(v / 1023 * 2 - 1) / sqrt(2)`; the left-out component is the positive root that makes it unit;
 //! - kind 4: three u16 words, the low 15 bits of each a component, `(v / 32767 * 2 - 1) / sqrt(2)`, in the order of
-//!   their components; the index of the one left out is bit 15 of the first word (read as the high bit) and the second
-//!   (the low), bit 15 of the third its sign (0 on all 84,886 keys of the sample: a clip that sets it is refused). This
-//!   order of the two index bits is unverified: the three kind 4 fixtures below all leave out w (index 3, both bits
-//!   set), the first-key census is not split by index, and Shaun White Skateboarding's kind 4 stores the two bits the
-//!   other way round ([`crate::shaunwhite::animation`]);
+//!   their components; the index of the one left out is bit 15 of the second word, as 2, plus bit 15 of the first (as
+//!   Shaun White Skateboarding's own unpack takes it, [`crate::shaunwhite::animation::packed_quat48`]), bit 15 of the
+//!   third its sign (0 on all 5,540,257 keys of the five forges: a clip that sets it is refused). Told by first keys
+//!   against the mapped bone's stored local rotation (1 - |dot| < 1e-6), split by the two bits: a first key whose bits
+//!   give index 1 matches on 318 of 841 tracks read so and 0 read with the bits the other way round, index 2 on 738
+//!   of 2,149 and 1; indices 0 and 3 read the same either way (438 of 974, 1,004 of 2,907). Consecutive keys across a
+//!   change between index 0 or 3 and 1 or 2 stay within |dot| > 0.99 on 73% to 88% of pairs read so, 2% to 4% the
+//!   other way. The scale and rounding are not checked against Riders Republic's code (its executable is packed);
 //! - kind 7: a u16 whose low 15 bits are z of a rotation about z alone, the same scale, w the positive root (bit 15 is
 //!   set on 9% of keys and makes no difference to the match: left unread);
 //! - kind 5: a little-endian u64 of three 20-bit components and four more bits, on a ring: bits 8 to 27 the first
@@ -315,21 +318,10 @@ pub(crate) fn quat_xyz(b: [u8; 12]) -> [f32; 4] {
     smallest_three(3, kept)
 }
 
-/// Which of a 48-bit rotation's first two words holds the high bit of the index of the component left out.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum IndexOrder {
-    /// Bit 15 of the first word is the index's high bit, the second's its low bit: Riders Republic's kind 4 as this
-    /// module reads it, unverified for indices 1 and 2 (the module documentation).
-    FirstHigh,
-    /// Bit 15 of the first word is the index's low bit, the second's its high bit: Shaun White Skateboarding's kind 4
-    /// ([`crate::shaunwhite::animation`]).
-    FirstLow,
-}
-
 /// A rotation stored in 48 bits: three little-endian u16 words, the low 15 bits of each a component kept
 /// (`(v / 32767 * 2 - 1) / sqrt(2)`, in the order of their components), the index of the one left out bit 15 of the
-/// first and second words, in the game's `order`. Bit 15 of the third must be clear; the error says so.
-pub(crate) fn quat48(b: [u8; 6], order: IndexOrder) -> Result<[f32; 4], &'static str> {
+/// first and second words, the second's the high bit. Bit 15 of the third must be clear; the error says so.
+fn quat48(b: [u8; 6]) -> Result<[f32; 4], &'static str> {
     let [a0, a1, b0, b1, c0, c1] = b;
     let words = [
         u16::from_le_bytes([a0, a1]),
@@ -340,11 +332,7 @@ pub(crate) fn quat48(b: [u8; 6], order: IndexOrder) -> Result<[f32; 4], &'static
     if w2 >> 15 != 0 {
         return Err("with its sign bit set");
     }
-    let (high, low) = match order {
-        IndexOrder::FirstHigh => (w0 >> 15, w1 >> 15),
-        IndexOrder::FirstLow => (w1 >> 15, w0 >> 15),
-    };
-    let omitted = u8::try_from((high << 1) | low).unwrap_or(3);
+    let omitted = u8::try_from(((w1 >> 15) << 1) | (w0 >> 15)).unwrap_or(3);
     let kept = words.map(|w| component(w & 0x7FFF, 32767.0));
     Ok(smallest_three(omitted, kept))
 }
@@ -441,10 +429,7 @@ impl StoredTrack {
                 let v = self.values.as_chunks::<6>().0;
                 counted(v.len())?;
                 v.iter()
-                    .map(|b| {
-                        quat48(*b, IndexOrder::FirstHigh)
-                            .map_err(|why| Error::Values(format!("a kind 4 value {why}")))
-                    })
+                    .map(|b| quat48(*b).map_err(|why| Error::Values(format!("a kind 4 value {why}"))))
                     .collect::<Result<Vec<_>, _>>()
                     .map(Values::Quaternions)
             }
@@ -886,6 +871,24 @@ mod tests {
             &kind(12, &[0xBF, 0x92, 0xBE, 0x92, 0xBE, 0x12]),
             &[-0.5, -0.5, -0.5, 0.5],
             1e-4
+        ));
+        use std::f32::consts::FRAC_1_SQRT_2;
+        // kind 4 keys that leave out y and z: the second word's bit 15 is the index's high bit (Riders Republic's
+        // first keys, at their bones' stored rotations, up to sign)
+        assert!(close(
+            &kind(12, &[0xFF, 0xBF, 0xFF, 0x3F, 0x02, 0x00]).map(|x| -x),
+            &[0.0, -FRAC_1_SQRT_2, 0.0, FRAC_1_SQRT_2],
+            2e-4
+        ));
+        assert!(close(
+            &kind(12, &[0xC0, 0x12, 0xBE, 0x92, 0xBE, 0x12]).map(|x| -x),
+            &[0.500001, 0.499999, -0.500001, 0.499999],
+            2e-4
+        ));
+        assert!(close(
+            &kind(12, &[0xFF, 0x3F, 0xFF, 0xBF, 0xFC, 0x7F]),
+            &[0.0, 0.0, FRAC_1_SQRT_2, FRAC_1_SQRT_2],
+            2e-4
         ));
         // kind 3 (tag 9): a 10-bit rotation
         assert!(close(
