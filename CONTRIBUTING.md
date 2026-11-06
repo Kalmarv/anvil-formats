@@ -30,7 +30,7 @@ require = 'gate'                         # optional: fail on a missing required 
 GAME_DATA=path/to/game-data.toml cargo test --workspace
 ```
 
-The file format is documented in [primase-testdata](https://github.com/Kalmarv/primase-testdata), a git dependency of
+The file format is documented in [primase-testdata](https://github.com/Kalmarv/primase-testdata), a crates.io dependency of
 the tests. The inputs every test may ask for are listed in [tests/inputs/README.md](tests/inputs/README.md). The real
 forges are large (Riders Republic's `DataPC_MAD_USNAT.forge` is 15.6 GB; its tests read about 163 MB of it). A test
 that reads a new real file declares it in `tests/inputs/mod.rs` first; `tests/real_data_inputs.rs` checks the
