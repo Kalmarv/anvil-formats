@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 (2026-11-06)
+
+- `data`: `read_block` and `read_entry` refuse a streamed block as one (`Error::Streamed`, new): bit 15 of the second
+  u16 after the algorithm is clear on every streamed block and set on every block with a chunk table. Before, they
+  read the first chunk's header as a chunk table and refused the two WhiteRoom forges' `PrefetchingFileInfos` entries
+  for "more chunks than the bytes can hold" (the other four forges' are over the 512 KiB the census tried). `prefetch`
+  reads them, as before.
+- Tests: every Riders Republic forge's `PrefetchingFileInfos` is refused by `read_entry` as streamed, and its
+  `GlobalMetaFile` (entry 0) for having no block magic. Over all six forges, those 12 are the only entries
+  `Archive::resource` refuses.
+
 ## 0.4.1 (2026-11-06)
 
 - Tests: the Riders Republic skin census reads all six forges and names the 26 mesh bone ids that are no Skeleton's

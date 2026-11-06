@@ -163,6 +163,13 @@ fn what_is_not_established_is_refused() {
     let mut extra = entry(good(&res, &frame));
     extra.push(0);
     assert!(matches!(read_entry(&extra, BOUND), Err(Error::Trailing(1))));
+    // a block whose flags are a streamed block's (bit 15 of the second u16 clear): no chunk table to read
+    let mut streamed = block(2, 5, 1, n, &frame, sum);
+    streamed[13..15].copy_from_slice(&4u16.to_le_bytes());
+    assert!(matches!(
+        read_entry(&entry(streamed), BOUND),
+        Err(Error::Streamed { flags: 4, .. })
+    ));
     // GlobalMetaFile-like: no block magic
     assert!(matches!(
         read_entry(&[1, 0, 0, 0, 0, 0, 0, 0, 0, 0], BOUND),

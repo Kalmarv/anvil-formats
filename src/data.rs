@@ -24,7 +24,7 @@
 //! decoded size ([`read_stream`]); a Riders Republic forge's `PrefetchingFileInfos` entry is one block alone, its chunks
 //! running to the entry's end ([`read_stream_to_end`], [`crate::prefetch`]). Observed on every block of both games: the
 //! second u16 after the algorithm has bit 15 set where the block has a chunk table (32768, 32772) and clear where it is
-//! streamed (0, 4).
+//! streamed (0, 4), and a block whose bit is clear is refused as streamed ([`Error::Streamed`]) where a table is read.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
@@ -52,6 +52,9 @@ pub const ALGORITHM_LZO2A: u8 = 2;
 pub const CHECKSUM_INIT: u32 = 0;
 /// The byte before each chunk of a streamed block ([`read_stream`]).
 pub const STREAM_MARKER: u8 = 1;
+/// Bit 15 of the second u16 after the algorithm: set on every block with a chunk table, clear on every streamed one.
+const TABLE_FLAG: u16 = 0x8000;
+
 /// The size of a streamed block's header: the magic and the compression info.
 const STREAM_HEADER: usize = 15;
 
@@ -86,6 +89,16 @@ pub enum Error {
         version: u16,
         /// The algorithm byte found.
         algorithm: u8,
+    },
+    /// The block is a streamed one (bit 15 of the second u16 after the algorithm clear, `flags` the u16): it has no
+    /// chunk table, so [`read_block`] and [`read_entry`] refuse it. [`read_stream`] and [`read_stream_to_end`] read
+    /// one: a Riders Republic forge's `PrefetchingFileInfos` entry is one ([`crate::prefetch`]).
+    #[error("block at {at}: a streamed block (flags {flags:#06x}: bit 15 clear), with no chunk table")]
+    Streamed {
+        /// The offset of the block in the entry.
+        at: usize,
+        /// The second u16 after the algorithm.
+        flags: u16,
     },
     /// The block's chunk count is zero, past this machine's address space, or more than the bytes can hold;
     /// `why` says which.
@@ -229,7 +242,7 @@ pub struct Resource {
 }
 
 /// The block at `at` in `bytes`, checked and decoded, and where the next one starts. `max_decoded` bounds the decoded
-/// size its chunks may declare in all.
+/// size its chunks may declare in all. A streamed block is refused as such ([`Error::Streamed`]).
 pub fn read_block(bytes: &[u8], at: usize, max_decoded: usize) -> Result<(Block, usize), Error> {
     let Info {
         version,
@@ -237,6 +250,12 @@ pub fn read_block(bytes: &[u8], at: usize, max_decoded: usize) -> Result<(Block,
         unknown,
         decoder,
     } = info(bytes, at)?;
+    if unknown[1] & TABLE_FLAG == 0 {
+        return Err(Error::Streamed {
+            at,
+            flags: unknown[1],
+        });
+    }
     let info = |off: usize| at.saturating_add(off);
     let overflow = Error::Overflow;
     let narrow = version == VERSION_1;

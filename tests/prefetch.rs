@@ -101,8 +101,14 @@ fn a_streamed_lzo1x_block_reads_to_the_entry_s_end() {
         (block.chunks[0].decoded_size, block.chunks[0].stored_size),
         (12, 16)
     );
-    // the block-with-a-table reader takes algorithm 0 too
+    // the block-with-a-table reader takes algorithm 0 too, its flags a table block's (bit 15 of the second u16 set),
+    // and refuses the streamed block as one
+    assert!(matches!(
+        data::read_block(&b, 0, 64),
+        Err(DataError::Streamed { at: 0, flags: 4 })
+    ));
     let mut table = header(ALGORITHM_LZO1X);
+    table[13..15].copy_from_slice(&0x8004u16.to_le_bytes());
     table.extend(1u32.to_le_bytes());
     let chunk = lzo1x_chunk(b"abcd");
     table.extend(4u32.to_le_bytes());
@@ -277,7 +283,8 @@ const FORGES: [(&str, usize, usize, usize, usize, usize, usize); 6] = [
     ("DataPC_MAD_WhiteRoom_patch_01.forge", 337, 335, 481, 0, 11_999, 1),
 ];
 
-/// Each of the six forges ends with its `PrefetchingFileInfos`: one LZO1X-streamed block whose every chunk decodes,
+/// Each of the six forges ends with its `PrefetchingFileInfos`: one LZO1X-streamed block whose every chunk decodes
+/// (and which the entry reader refuses as streamed),
 /// holding a record for every entry of the forge but the `GlobalMetaFile` and itself. Every id a record holds is an
 /// index id of one of the six forges; groups are only in GridCellDataBlocks' records and name entries of type
 /// 0x41813744; values are only in GridCellDataBlocks' records.
@@ -314,7 +321,29 @@ fn every_riders_forge_s_records_name_entries_of_the_forges() {
             .position(|(_, n)| n.name == NAME)
             .expect("a PrefetchingFileInfos");
         assert_eq!(k, entries - 1, "{name}: the last entry");
-        let payload = forge.payload(&mut File::open(path).unwrap(), k).unwrap();
+        let mut file = File::open(path).unwrap();
+        let payload = forge.payload(&mut file, k).unwrap();
+        // an entry's two blocks are not what it holds: the entry reader refuses it as streamed
+        assert!(
+            matches!(
+                data::read_entry(&payload, 64 << 20),
+                Err(DataError::Streamed { at: 0, flags: 4 })
+            ),
+            "{name}"
+        );
+        // nor is the GlobalMetaFile, the first entry, data blocks: its first eight bytes are no block magic
+        let meta = forge.entries().position(|(_, n)| n.name == "GlobalMetaFile");
+        assert_eq!(meta, Some(0), "{name}");
+        assert!(
+            matches!(
+                data::read_entry(&forge.payload(&mut file, 0).unwrap(), 64 << 20),
+                Err(DataError::Magic {
+                    at: 0,
+                    found: 0x0000_0004_0000_0001
+                })
+            ),
+            "{name}"
+        );
         let block = read_stream_to_end(&payload, 0, 64 << 20).unwrap();
         assert_eq!(
             (
