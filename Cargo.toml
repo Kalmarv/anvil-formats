@@ -28,7 +28,7 @@ workspace = true
 
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.99"
 license = "GPL-3.0-or-later"
@@ -36,7 +36,7 @@ repository = "https://github.com/Kalmarv/anvil-formats"
 publish = true
 
 [workspace.dependencies]
-dxcontainer = { version = "0.4.0", git = "https://github.com/Kalmarv/dx", rev = "39883bd084ad1db1f66416f41b25cf2529f9eec1" }
+dxcontainer = "0.5.0"
 primase-foundations = "0.3.1"
 sha2 = "0.10"
 primase-testdata = "0.1.8"

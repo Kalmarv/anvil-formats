@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 (2026-11-06)
+
+- Depends on `dxcontainer` 0.5.0 (from crates.io, instead of a git revision), for a crate that uses dx 0.5.0 to
+  hold one copy of it.
+
 ## 0.2.0 (2026-11-06)
 
 - `rider::RiderSlot::colours` names the colour table (`HAIR_COLOURS`, `BEARD_COLOURS`) whose rows are the variants of the hair and beard activator slots; it is `None` for the other slots.
