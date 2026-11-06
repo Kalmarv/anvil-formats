@@ -25,9 +25,16 @@
 //! tracks).
 //!
 //! The values of each kind ([`Track::values`]):
-//! - kind 4: a rotation in 48 bits, kind 5 one in 64 bits, both smallest-three quaternions laid out as Riders
-//!   Republic's kinds 4 and 5 ([`crate::animation`]); kind 6: the x, y and z of a rotation as f32, w the positive
-//!   root;
+//! - kind 4: a rotation in 48 bits, a smallest-three quaternion: three u16 words, the low 15 bits of each a component
+//!   kept, in the order of their components, as Riders Republic's kind 4 ([`crate::animation`]), but with the index of
+//!   the component left out stored the other way round: bit 15 of the first word its low bit, of the second its high
+//!   bit (0 x, 1 y, 2 z, 3 w). Bit 15 of the third word is 0 on every key. Told by the keys around a change of index
+//!   (24,274 consecutive pairs in the 2,708 distinct clips): read so, every one of the twelve kinds of change keeps
+//!   96% to 99% of its pairs within |dot| > 0.9 of each other, as keys of one index do (99.6% to 100%); with the two
+//!   bits read as Riders Republic's, the eight changes between index 0 or 3 and index 1 or 2 keep 1% to 24%. Not
+//!   checked against the game's own decode: no traced frame is a pose of a kind 4 clip (`tests/sws_animation.rs`);
+//! - kind 5: a rotation in 64 bits, a smallest-three quaternion laid out as Riders Republic's kind 5; kind 6: the x,
+//!   y and z of a rotation as f32, w the positive root;
 //! - kind 8: a translation packed in a u32: x the top 11 bits (21 to 31), y the next 11 (10 to 20), z the low 10, each
 //!   two's complement, a unit a millimetre; kind 9: a translation as three i16, a unit a millimetre;
 //! - kind 7: three f32, kind 10 one f32, kinds 11 and 17 a byte each, whose meaning is not read.
@@ -47,7 +54,7 @@
 
 use primase_foundations::bytes::{Cursor, Field, FieldError};
 
-use crate::animation::{quat_xyz, quat48, quat64};
+use crate::animation::{IndexOrder, quat_xyz, quat48, quat64};
 use crate::fields::LE;
 
 pub use crate::animation::{ANIMATION, TIME_TICKS_PER_SECOND};
@@ -263,7 +270,10 @@ impl Track {
                 v.as_chunks::<6>()
                     .0
                     .iter()
-                    .map(|b| quat48(*b).map_err(|why| Error::Values(format!("a kind 4 value {why}"))))
+                    .map(|b| {
+                        quat48(*b, IndexOrder::FirstLow)
+                            .map_err(|why| Error::Values(format!("a kind 4 value {why}")))
+                    })
                     .collect::<Result<_, _>>()?,
             ),
             5 => Values::Rotations(

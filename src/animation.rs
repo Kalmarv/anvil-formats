@@ -44,8 +44,11 @@
 //!   component left out, bits 20 to 29, 10 to 19 and 0 to 9 the three others in the order of their components, each
 //!   `(v / 1023 * 2 - 1) / sqrt(2)`; the left-out component is the positive root that makes it unit;
 //! - kind 4: three u16 words, the low 15 bits of each a component, `(v / 32767 * 2 - 1) / sqrt(2)`, in the order of
-//!   their components; the index of the one left out is bit 15 of the first word (high) and the second (low), bit 15 of
-//!   the third its sign (0 on all 84,886 keys of the sample: a clip that sets it is refused);
+//!   their components; the index of the one left out is bit 15 of the first word (read as the high bit) and the second
+//!   (the low), bit 15 of the third its sign (0 on all 84,886 keys of the sample: a clip that sets it is refused). This
+//!   order of the two index bits is unverified: the three kind 4 fixtures below all leave out w (index 3, both bits
+//!   set), the first-key census is not split by index, and Shaun White Skateboarding's kind 4 stores the two bits the
+//!   other way round ([`crate::shaunwhite::animation`]);
 //! - kind 7: a u16 whose low 15 bits are z of a rotation about z alone, the same scale, w the positive root (bit 15 is
 //!   set on 9% of keys and makes no difference to the match: left unread);
 //! - kind 5: a little-endian u64 of three 20-bit components and four more bits, on a ring: bits 8 to 27 the first
@@ -312,10 +315,21 @@ pub(crate) fn quat_xyz(b: [u8; 12]) -> [f32; 4] {
     smallest_three(3, kept)
 }
 
+/// Which of a 48-bit rotation's first two words holds the high bit of the index of the component left out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum IndexOrder {
+    /// Bit 15 of the first word is the index's high bit, the second's its low bit: Riders Republic's kind 4 as this
+    /// module reads it, unverified for indices 1 and 2 (the module documentation).
+    FirstHigh,
+    /// Bit 15 of the first word is the index's low bit, the second's its high bit: Shaun White Skateboarding's kind 4
+    /// ([`crate::shaunwhite::animation`]).
+    FirstLow,
+}
+
 /// A rotation stored in 48 bits: three little-endian u16 words, the low 15 bits of each a component kept
 /// (`(v / 32767 * 2 - 1) / sqrt(2)`, in the order of their components), the index of the one left out bit 15 of the
-/// first word (high) and the second (low). Bit 15 of the third must be clear; the error says so.
-pub(crate) fn quat48(b: [u8; 6]) -> Result<[f32; 4], &'static str> {
+/// first and second words, in the game's `order`. Bit 15 of the third must be clear; the error says so.
+pub(crate) fn quat48(b: [u8; 6], order: IndexOrder) -> Result<[f32; 4], &'static str> {
     let [a0, a1, b0, b1, c0, c1] = b;
     let words = [
         u16::from_le_bytes([a0, a1]),
@@ -326,7 +340,11 @@ pub(crate) fn quat48(b: [u8; 6]) -> Result<[f32; 4], &'static str> {
     if w2 >> 15 != 0 {
         return Err("with its sign bit set");
     }
-    let omitted = u8::try_from(((w0 >> 15) << 1) | (w1 >> 15)).unwrap_or(3);
+    let (high, low) = match order {
+        IndexOrder::FirstHigh => (w0 >> 15, w1 >> 15),
+        IndexOrder::FirstLow => (w1 >> 15, w0 >> 15),
+    };
+    let omitted = u8::try_from((high << 1) | low).unwrap_or(3);
     let kept = words.map(|w| component(w & 0x7FFF, 32767.0));
     Ok(smallest_three(omitted, kept))
 }
@@ -423,7 +441,10 @@ impl StoredTrack {
                 let v = self.values.as_chunks::<6>().0;
                 counted(v.len())?;
                 v.iter()
-                    .map(|b| quat48(*b).map_err(|why| Error::Values(format!("a kind 4 value {why}"))))
+                    .map(|b| {
+                        quat48(*b, IndexOrder::FirstHigh)
+                            .map_err(|why| Error::Values(format!("a kind 4 value {why}")))
+                    })
                     .collect::<Result<Vec<_>, _>>()
                     .map(Values::Quaternions)
             }

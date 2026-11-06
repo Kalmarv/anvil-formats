@@ -70,10 +70,16 @@ fn translation() -> Vec<u8> {
     )
 }
 
+/// The middle of a 15-bit component's range: 0.
+const MID: u16 = 0x4000;
+
 /// A bone's rotation: one key of kind 4, the identity (w left out, x, y and z at the middle of their range).
 fn rotation() -> Vec<u8> {
-    let mid = 0x3FFFu16 + 1;
-    let w = [mid | 0x8000, mid | 0x8000, mid];
+    rotation_key([MID | 0x8000, MID | 0x8000, MID])
+}
+
+/// A rotation track of one kind 4 key, its three words `w`.
+fn rotation_key(w: [u16; 3]) -> Vec<u8> {
     block(
         0x10,
         8,
@@ -116,6 +122,22 @@ fn hand_built_animation_reads_and_refuses_what_does_not_fit() {
             .all(|(x, y)| (x - y).abs() < 1e-4),
         "{q:?}"
     );
+
+    // kind 4's index: bit 15 of the first word its low bit, of the second its high bit
+    for (w, left_out) in [
+        ([MID | 0x8000, MID, MID], [0.0, 1.0, 0.0, 0.0]),
+        ([MID, MID | 0x8000, MID], [0.0, 0.0, 1.0, 0.0]),
+        ([MID, MID, MID], [1.0, 0.0, 0.0, 0.0]),
+    ] {
+        let a = Animation::parse(&clip(0, &[], &[translation(), rotation_key(w)])).unwrap();
+        let Values::Rotations(q) = a.tracks[1].values().unwrap() else {
+            panic!("kind 4 is a rotation")
+        };
+        assert!(
+            q[0].iter().zip(left_out).all(|(x, y)| (x - y).abs() < 1e-4),
+            "{w:x?}: {q:?}"
+        );
+    }
 
     // events are kept as bytes: the track data is found after them
     let events = [0u8, 0, 0, 0, 0, 0x13, 0x22, 0x68, 0x41, 7];
@@ -207,7 +229,8 @@ fn every_real_animation_and_anim_set_reads() {
     let mut layouts: BTreeMap<u32, BTreeSet<Vec<u32>>> = BTreeMap::new();
     // every bind rotation and position of a bone of that name, in any Skeleton
     let mut binds: BTreeMap<u32, Vec<Bind>> = BTreeMap::new();
-    let mut first_keys: Vec<(u32, bool, Values)> = Vec::new();
+    let mut first_keys: Vec<(u32, u8, Values)> = Vec::new();
+    let mut changes: BTreeMap<[u16; 2], (usize, usize)> = BTreeMap::new();
     for path in &forges {
         let f = Forge::open(path).unwrap();
         let mut r = File::open(path).unwrap();
@@ -227,7 +250,8 @@ fn every_real_animation_and_anim_set_reads() {
                         // the declared body is the object without its header byte and table
                         assert_eq!(o.trailer.len(), 7 + 12 * a.table.len(), "{}", at());
                         *n.entry("clips").or_default() += 1;
-                        if clips.insert(a.id) {
+                        let distinct = clips.insert(a.id);
+                        if distinct {
                             *n.entry("distinct clips").or_default() += 1;
                         }
                         *n.entry("tracks").or_default() += a.tracks.len();
@@ -245,9 +269,12 @@ fn every_real_animation_and_anim_set_reads() {
                                     q.iter()
                                         .all(|q| (q.iter().map(|x| x * x).sum::<f32>() - 1.0).abs() < 1e-3)
                                 );
+                                if t.kind() == 4 && distinct {
+                                    index_changes(&t.values, q, &mut changes);
+                                }
                             }
                             if bone != 0 && (t.is_rotation() || t.is_translation()) {
-                                first_keys.push((bone, t.is_rotation(), v));
+                                first_keys.push((bone, t.kind(), v));
                             }
                         }
                         layouts.entry(a.layout).or_default().insert(a.mappings.clone());
@@ -286,34 +313,71 @@ fn every_real_animation_and_anim_set_reads() {
         "layout words with one mapping list",
         layouts.values().filter(|m| m.len() == 1).count(),
     );
-    for (bone, rotation, v) in &first_keys {
+    // by kind: (first keys at a bind rotation within 1e-5 or a bind position within 1 mm, first keys of a bone a
+    // Skeleton has)
+    let mut at_bind: BTreeMap<u8, (usize, usize)> = BTreeMap::new();
+    for (bone, kind, v) in &first_keys {
         let Some(b) = binds.get(bone) else {
             *n.entry("first keys of a bone no Skeleton has").or_default() += 1;
             continue;
         };
-        match v {
-            Values::Rotations(q) if *rotation => {
-                *n.entry("rotation first keys").or_default() += 1;
-                let best = b.iter().map(|(r, _)| apart(q[0], *r)).fold(f32::MAX, f32::min);
-                *n.entry("rotation first keys at a bind rotation (1e-5)")
-                    .or_default() += usize::from(best < 1e-5);
-            }
+        let at = match v {
+            Values::Rotations(q) => b.iter().map(|(r, _)| apart(q[0], *r)).fold(f32::MAX, f32::min) < 1e-5,
             Values::Translations(p) => {
-                *n.entry("translation first keys").or_default() += 1;
-                let best = b
-                    .iter()
+                b.iter()
                     .map(|(_, t)| (0..3).map(|i| (p[0][i] - t[i]).abs()).fold(0.0, f32::max))
-                    .fold(f32::MAX, f32::min);
-                *n.entry("translation first keys within 1 mm of a bind position")
-                    .or_default() += usize::from(best <= 0.0011);
+                    .fold(f32::MAX, f32::min)
+                    <= 0.0011
             }
-            _ => {}
-        }
+            _ => continue,
+        };
+        let e = at_bind.entry(*kind).or_default();
+        e.0 += usize::from(at);
+        e.1 += 1;
     }
-    println!("{n:#?}");
+    println!("{n:#?}\nfirst keys at the bind pose by kind (at it, of): {at_bind:?}");
     assert!(n["clips"] > 0 && n["sets"] > 0);
     assert_eq!(n["pairs naming two clips"], n["pairs"]);
     assert_eq!(n["tracks ending on the length"] + 25, n["tracks"]);
+    // the first keys at the bind pose, by kind (all 80,466 objects, a clip stored twice counted twice): pinned, so a
+    // change to a decode shows. Kind 4's index bits read the other way round give 198,380 at a bind rotation.
+    assert_eq!(
+        at_bind,
+        BTreeMap::from([
+            (4, (205_131, 3_865_438)),
+            (5, (10_098, 238_030)),
+            (6, (59_960, 942_702)),
+            (8, (95_872, 519_002)),
+            (9, (1_009, 95_187))
+        ])
+    );
+    // kind 4's index bits: a key whose omitted component differs from the key before it decodes to a rotation
+    // beside that key's (96% to 99% of each kind of change with |dot| > 0.9), as consecutive keys of one index do
+    // (99.6% to 100%). Read with the two bits the other way round, as Riders Republic's are, the eight changes between
+    // index 0 or 3 and index 1 or 2 keep 1% to 24%.
+    println!(
+        "kind 4 consecutive keys whose index bits change, by the bits before and after (bit 15 of the first word, as 2, plus that of the second): (pairs, |dot| > 0.9) {changes:?}"
+    );
+    assert_eq!(changes.len(), 12);
+    for (bits, (pairs, smooth)) in &changes {
+        assert!(*smooth * 10 >= *pairs * 9, "{bits:?}: {smooth} of {pairs}");
+    }
+}
+
+/// Counts, by the stored bits that change, the consecutive keys of a kind 4 track (`values` as stored, `q` decoded)
+/// whose index bits differ, and those of them whose rotations are within |dot| > 0.9 of each other.
+fn index_changes(values: &[u8], q: &[[f32; 4]], changes: &mut BTreeMap<[u16; 2], (usize, usize)>) {
+    let bits: Vec<u16> = values
+        .chunks(6)
+        .map(|w| (u16::from(w[1] >> 7) << 1) | u16::from(w[3] >> 7))
+        .collect();
+    for (b, q) in bits.windows(2).zip(q.windows(2)) {
+        if b[0] != b[1] {
+            let e = changes.entry([b[0], b[1]]).or_default();
+            e.0 += 1;
+            e.1 += usize::from(q[0].iter().zip(q[1]).map(|(x, y)| x * y).sum::<f32>().abs() > 0.9);
+        }
+    }
 }
 
 /// The tracks' value at `tick`: linear between the keys around it (rotations normalized, the second key's sign
@@ -365,10 +429,20 @@ fn decoded(a: &Animation) -> Decoded {
 }
 
 /// The renderer's bone matrices are the decoded clips: for a traced skinned frame (the `runtime` oracle), one stored
-/// clip, sampled at the frame's time (to a hundredth of a tick), gives every traced local rotation of the frame's child bones (1 − |dot| ≤ 1e-6) and
-/// every traced local translation of the bones it has a translation track for (≤ 0.1 mm). Frames whose bones the
-/// loaded clips don't animate (the bind pose, a blend or a clip that isn't stored) are counted, not refused. The
-/// reproduced frames use rotation kinds 5 and 6 and translation kinds 8 and 9.
+/// clip, sampled at the frame's time (to a hundredth of a tick), gives every traced local rotation of the frame's
+/// child bones (1 − |dot| ≤ 1e-6) and every traced local translation of the bones it has a translation track for
+/// (≤ 0.1 mm). It does so for exactly 24 of the trace's 156 frames: the train's in frames 7201 to 7204 and all twenty
+/// of the walking worker's two meshes (legs and torso), with rotation kinds 5 and 6 and translation kinds 8 and 9.
+/// The other 132 are not one clip's pose, and the test fails if one of them becomes one:
+/// - the train in its two frames before (7199, 7200), at its bind pose, which the clip gives to 2 mm only, and in
+///   its ten later frames (8000 to 8180), where the same clip, at times rising 13.3 ticks a step, gives every bone
+///   the clip moves but one, which something else drives;
+/// - the five pigeons (60 frames): no clip has a rotation track for each of their twelve bones; the one that drives
+///   eleven of them gives seven at a steady rate, not the rest;
+/// - two walking characters' four meshes and two heads (59 frames): no stored clip gives any of their bones, of any
+///   kind, at any time, with a bone a clip has no track for at its bind rotation, and those meshes' child bones lie up
+///   to 2.4 m from their stored positions with no clip translating them (`tests/sws_skeleton.rs`). These are the 26
+///   frames whose nearest clip is one of kind 4, so kind 4 is not checked here.
 #[test]
 fn traced_skinned_frames_are_decoded_clip_poses() {
     let (Some(folder), Some(table)) = (
@@ -391,7 +465,7 @@ fn traced_skinned_frames_are_decoded_clip_poses() {
         }
     }
     let mut cache: BTreeMap<u32, Decoded> = BTreeMap::new();
-    let (mut reproduced, mut kinds) = (0usize, BTreeSet::new());
+    let (mut reproduced, mut unanimated, mut kinds) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
     for ((forge, _, mesh, frame), bones) in &frames {
         let mut best: Option<(f64, f64, u32, f64)> = None;
         for a in &data.animations {
@@ -447,6 +521,7 @@ fn traced_skinned_frames_are_decoded_clip_poses() {
             best = Some((r, d, a.id, tick));
         }
         let Some((r, d, clip, tick)) = best else {
+            unanimated.insert(*mesh);
             println!(
                 "{forge}: mesh {mesh} frame {frame}: no stored clip animates its {} bones",
                 bones.len()
@@ -483,16 +558,33 @@ fn traced_skinned_frames_are_decoded_clip_poses() {
             }
         );
         if ok {
-            reproduced += 1;
+            reproduced.insert((*mesh, *frame));
             kinds.extend(used);
         }
     }
     println!(
-        "{reproduced} of {} traced frames reproduced by a decoded clip; track kinds: {kinds:?}",
+        "{} of {} traced frames reproduced by a decoded clip; track kinds: {kinds:?}",
+        reproduced.len(),
         frames.len()
     );
-    // the train's four moving frames and the walking worker's twenty (legs and torso)
-    assert!(reproduced >= 24, "{reproduced}");
+    let (train, legs, torso) = (2_445_827_479u32, 2_881_073_162u32, 2_881_073_252u32);
+    let expected: BTreeSet<(u32, u32)> = (7201..=7204)
+        .map(|f| (train, f))
+        .chain(
+            [legs, torso]
+                .into_iter()
+                .flat_map(|m| (8000..=8180).step_by(20).map(move |f| (m, f))),
+        )
+        .collect();
+    assert_eq!(reproduced, expected);
+    let pigeons = BTreeSet::from([
+        1_814_156_304,
+        1_814_156_345,
+        1_814_156_367,
+        1_950_109_412,
+        1_950_109_447,
+    ]);
+    assert_eq!(unanimated, pigeons);
     for k in [
         ("rotation", 5),
         ("rotation", 6),
