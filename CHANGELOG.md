@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.1 (2026-11-06)
+
+- `shaunwhite::animation` decodes kind 4 (48-bit) rotations as Shaun White Skateboarding's own unpack does
+  (`packed_quat48`, public): the game's executable, run on chosen words, gives the same rotation bit for bit. That
+  confirms the left-out component's index takes bit 15 of the first word as its low bit, and settles the rest: the
+  scale is `sqrt(2) / 32767` rounded to f32, each step rounds to f32, and the third word is read as an i16 (its sign
+  bit is clear on every key of the install). Before this, results differed from the game's in the last bits, and a
+  key with that sign bit set was refused.
+- Fixed: `animation` reads Riders Republic's kind 4 (48-bit) rotations with the left-out component's index taking
+  bit 15 of the first word as its low bit, as Shaun White Skateboarding's does. Before this, keys that leave out y
+  or z decoded as the other: 2,990 of the 6,871 first keys measured. The order comes from the data: read so, a first
+  key leaving out y matches its bone's stored rotation on 318 of 841 tracks (0 the old way), and one leaving out z on
+  738 of 2,149 (1 the old way). The kind 4 first keys at their bones' stored rotations rise from 1,493 to 2,577.
+- Tests: `sky` checks `SkyKeyframe::radiance` and `StoredSky::radiance` against values worked out by hand from the
+  model (written out in the tests) instead of a copy of the shading. The Shaun White skeleton, animation, mesh-oracle
+  and skinned-draw tests pin their counts exactly instead of asserting that they are non-zero.
+
 ## 0.3.0 (2026-11-06)
 
 - `shaunwhite::shaders::read` reads the compressed SDB2 databases too (`ekshadersPC{low,med,high}compress.bin`,
