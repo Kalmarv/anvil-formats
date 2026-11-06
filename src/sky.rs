@@ -472,17 +472,11 @@ mod tests {
 
     /// The inscatter sampler, over a pseudo-random table at 4,000 coordinates that reach past every edge of it, is
     /// the original stencil bit for bit. Both are integer addressing and IEEE float arithmetic, so this holds on
-    /// every platform; `radiance`'s shading also calls the platform's `atan` and `powf`, whose last bits differ
-    /// between C runtimes, so its results are not pinned.
+    /// every platform. `radiance`'s shading also calls the platform's `atan` and `powf`, whose last bits differ
+    /// between C runtimes, so `radiance_matches_the_reference_shading` compares it within a tolerance instead.
     #[test]
     fn inscatter_sampling_matches_the_reference_stencil() {
-        let mut state = 0x1234_5678u32;
-        let mut next = move || {
-            state ^= state << 13;
-            state ^= state >> 17;
-            state ^= state << 5;
-            state
-        };
+        let mut next = xorshift(0x1234_5678);
         // finite positive half floats (exponent 1 to 29)
         let inscatter: Vec<u8> = (0..65_536 * 4)
             .flat_map(|_| {
@@ -507,6 +501,145 @@ mod tests {
             let reference = reference_sample(&key.inscatter, uvw).map(f32::to_bits);
             assert_eq!(sampled, reference, "at {uvw:?}");
         }
+    }
+
+    /// The clear-sky shading as first written, on `reference_sample`: the atan sun-height mapping, the Rayleigh
+    /// and two-lobe Mie phases and the stored channel ratios, each constant written out again here.
+    fn reference_radiance(table: &[u8], direction: [f32; 3], sun: [f32; 3], mie: [f32; 3]) -> [f32; 3] {
+        let normalize = |v: [f32; 3]| {
+            let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            v.map(|v| v / length)
+        };
+        let direction = normalize(direction);
+        let sun = normalize(sun);
+        let cosine = (direction[0] * sun[0] + direction[1] * sun[1] + direction[2] * sun[2]).clamp(-1.0, 1.0);
+        let radius = 6360.19f32;
+        let distance = -radius * direction[2]
+            + (radius * radius * (direction[2] * direction[2] - 1.0) + (radius + 60.0) * (radius + 60.0))
+                .max(0.0)
+                .sqrt();
+        let low = (3.65587f32 * -0.34202).atan();
+        let high = 3.65587f32.atan();
+        let uvw = [
+            0.015625 + ((3.65587 * sun[2].max(-0.34202)).atan() - low) / (high - low) * 0.96875,
+            0.001047 * distance + 0.015625,
+            (cosine + 1.0) * 0.46875 + 0.03125,
+        ];
+        let decoded = reference_sample(table, uvw).map(|value| value.powi(4));
+        let pi = std::f32::consts::PI;
+        let rayleigh = 3.0 / (16.0 * pi) * (1.0 + cosine * cosine);
+        let phase = |g: f32| {
+            3.0 / (8.0 * pi) * (1.0 - g * g) * (1.0 + cosine * cosine)
+                / ((2.0 + g * g) * (1.0 + g * g - 2.0 * g * cosine).powf(1.5))
+        };
+        let mie_phase = phase(mie[0]) * (1.0 - mie[2]) + phase(mie[1]) * mie[2];
+        let ratio = [1.0, 0.4296, 0.1752];
+        std::array::from_fn(|lane| {
+            decoded[lane] * rayleigh
+                + decoded[lane] * decoded[3] / decoded[0].max(0.0001) * ratio[lane] * mie_phase
+        })
+    }
+
+    /// A keyframe at `hour` whose inscatter texels are pseudo-random half floats in [0.5, 2): neighbouring texels
+    /// differ by at most 4x, so a last-bit difference in a platform's `atan` moves a filtered sample by well under
+    /// the tests' tolerance, while a wrong constant moves it by percent.
+    fn keyframe(hour: f32, next: &mut impl FnMut() -> u32) -> SkyKeyframe {
+        SkyKeyframe {
+            hour,
+            crc: 0,
+            inscatter: (0..65_536 * 4)
+                .flat_map(|_| ((next() % 0x0800 + 0x3800) as u16).to_le_bytes())
+                .collect(),
+            optical_depth: vec![],
+            irradiance: vec![],
+            sun_depth: vec![],
+            sun_irradiance: vec![],
+        }
+    }
+
+    fn xorshift(mut state: u32) -> impl FnMut() -> u32 {
+        move || {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state
+        }
+    }
+
+    /// Both sides call the same `atan` and `powf`, so on one platform they agree to rounding; the tolerance only
+    /// leaves room for the implementation's arithmetic to be regrouped.
+    fn assert_close(actual: [f32; 3], expected: [f32; 3], at: &dyn std::fmt::Debug) {
+        for (a, e) in actual.into_iter().zip(expected) {
+            assert!(
+                (a - e).abs() <= 1e-5 * e.abs(),
+                "{actual:?} against the reference {expected:?} at {at:?}"
+            );
+        }
+    }
+
+    /// Clear-sky radiance at 4,000 view, sun and Mie settings, sun heights below the horizon clamp included, is the
+    /// reference shading within 1e-5 relative.
+    #[test]
+    fn radiance_matches_the_reference_shading() {
+        let mut next = xorshift(0x1234_5678);
+        let key = keyframe(12.0, &mut next);
+        let mut unit = || (next() % 20_001) as f32 / 10_000.0 - 1.0;
+        for _ in 0..4000 {
+            let direction = [unit(), unit(), unit()];
+            let sun = [unit(), unit(), unit()];
+            let mie = [unit() * 0.9, unit() * 0.9, (unit() + 1.0) / 2.0];
+            if [direction, sun].iter().any(|v| v.iter().all(|&v| v == 0.0)) {
+                continue;
+            }
+            assert_close(
+                key.radiance(direction, sun, mie).unwrap(),
+                reference_radiance(&key.inscatter, direction, sun, mie),
+                &(direction, sun, mie),
+            );
+        }
+    }
+
+    /// A sky's radiance at an hour is its keyframes' radiance at the bracketing authored hours, linearly
+    /// interpolated, whatever their stored order, with the last keyframe interpolating to the first across midnight
+    /// and hours outside [0, 24) wrapped into it.
+    #[test]
+    fn stored_radiance_interpolates_between_the_bracketing_hours() {
+        let mut next = xorshift(0x9e37_79b9);
+        let keyframes = vec![
+            keyframe(18.0, &mut next),
+            keyframe(6.0, &mut next),
+            keyframe(12.0, &mut next),
+        ];
+        let sky = StoredSky {
+            sun_position_mode: 0,
+            sun_azimuth: 0.0,
+            sun_tilt: 0.0,
+            sun_elevation: 0.0,
+            sun_color: [0.0; 4],
+            sun_intensity: 0.0,
+            mie: [0.0; 3],
+            keyframes,
+        };
+        let [evening, morning, noon] = [0, 1, 2].map(|i| &sky.keyframes[i].inscatter);
+        let (direction, sun, mie) = ([0.3, -0.2, 0.6], [0.5, 0.4, 0.2], [0.76, -0.4, 0.3]);
+        let at = |table: &[u8]| reference_radiance(table, direction, sun, mie);
+        let lerp = |a: [f32; 3], b: [f32; 3], f: f32| std::array::from_fn(|i| a[i] + (b[i] - a[i]) * f);
+        for (hour, expected) in [
+            (6.0, at(morning)),
+            (9.0, lerp(at(morning), at(noon), 0.5)),
+            (16.5, lerp(at(noon), at(evening), 0.75)),
+            (21.0, lerp(at(evening), at(morning), 0.25)),
+            (3.0, lerp(at(evening), at(morning), 0.75)),
+            (-3.0, lerp(at(evening), at(morning), 0.25)),
+            (33.0, lerp(at(morning), at(noon), 0.5)),
+        ] {
+            assert_close(sky.radiance(hour, direction, sun, mie).unwrap(), expected, &hour);
+        }
+        let one = StoredSky {
+            keyframes: vec![sky.keyframes[2].clone()],
+            ..sky
+        };
+        assert_close(one.radiance(20.0, direction, sun, mie).unwrap(), at(noon), &20.0);
     }
 
     #[test]
