@@ -473,7 +473,7 @@ mod tests {
     /// The inscatter sampler, over a pseudo-random table at 4,000 coordinates that reach past every edge of it, is
     /// the original stencil bit for bit. Both are integer addressing and IEEE float arithmetic, so this holds on
     /// every platform. `radiance`'s shading also calls the platform's `atan` and `powf`, whose last bits differ
-    /// between C runtimes, so `radiance_matches_the_reference_shading` compares it within a tolerance instead.
+    /// between C runtimes, so `radiance_is_the_derived_single_scattering_shading` compares it within a tolerance instead.
     #[test]
     fn inscatter_sampling_matches_the_reference_stencil() {
         let mut next = xorshift(0x1234_5678);
@@ -503,57 +503,36 @@ mod tests {
         }
     }
 
-    /// The clear-sky shading as first written, on `reference_sample`: the atan sun-height mapping, the Rayleigh
-    /// and two-lobe Mie phases and the stored channel ratios, each constant written out again here.
-    fn reference_radiance(table: &[u8], direction: [f32; 3], sun: [f32; 3], mie: [f32; 3]) -> [f32; 3] {
-        let normalize = |v: [f32; 3]| {
-            let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-            v.map(|v| v / length)
-        };
-        let direction = normalize(direction);
-        let sun = normalize(sun);
-        let cosine = (direction[0] * sun[0] + direction[1] * sun[1] + direction[2] * sun[2]).clamp(-1.0, 1.0);
-        let radius = 6360.19f32;
-        let distance = -radius * direction[2]
-            + (radius * radius * (direction[2] * direction[2] - 1.0) + (radius + 60.0) * (radius + 60.0))
-                .max(0.0)
-                .sqrt();
-        let low = (3.65587f32 * -0.34202).atan();
-        let high = 3.65587f32.atan();
-        let uvw = [
-            0.015625 + ((3.65587 * sun[2].max(-0.34202)).atan() - low) / (high - low) * 0.96875,
-            0.001047 * distance + 0.015625,
-            (cosine + 1.0) * 0.46875 + 0.03125,
-        ];
-        let decoded = reference_sample(table, uvw).map(|value| value.powi(4));
-        let pi = std::f32::consts::PI;
-        let rayleigh = 3.0 / (16.0 * pi) * (1.0 + cosine * cosine);
-        let phase = |g: f32| {
-            3.0 / (8.0 * pi) * (1.0 - g * g) * (1.0 + cosine * cosine)
-                / ((2.0 + g * g) * (1.0 + g * g - 2.0 * g * cosine).powf(1.5))
-        };
-        let mie_phase = phase(mie[0]) * (1.0 - mie[2]) + phase(mie[1]) * mie[2];
-        let ratio = [1.0, 0.4296, 0.1752];
-        std::array::from_fn(|lane| {
-            decoded[lane] * rayleigh
-                + decoded[lane] * decoded[3] / decoded[0].max(0.0001) * ratio[lane] * mie_phase
-        })
-    }
-
-    /// A keyframe at `hour` whose inscatter texels are pseudo-random half floats in [0.5, 2): neighbouring texels
-    /// differ by at most 4x, so a last-bit difference in a platform's `atan` moves a filtered sample by well under
-    /// the tests' tolerance, while a wrong constant moves it by percent.
-    fn keyframe(hour: f32, next: &mut impl FnMut() -> u32) -> SkyKeyframe {
+    /// A keyframe at `hour` whose inscatter texel at (x, y, z) stores the half floats 0.5 + x/64, 0.5 + y/64,
+    /// 0.5 + z/32 and 0.75. Each lane is affine in one texel axis, so linear filtering inside the table returns the
+    /// same affine function of the continuous texel coordinate, exactly: red reveals the sun-height coordinate u,
+    /// green the path-length coordinate v and blue the view-sun coordinate w. All four are exact in half precision
+    /// (mantissa steps of 2^-11 in [0.5, 1)).
+    fn affine_keyframe(hour: f32) -> SkyKeyframe {
+        let inscatter = (0..16u16)
+            .flat_map(|z| (0..32u16).flat_map(move |y| (0..32u16).map(move |x| (x, y, z))))
+            .flat_map(|(x, y, z)| [0x3800 + x * 32, 0x3800 + y * 32, 0x3800 + z * 64, 0x3a00])
+            .flat_map(u16::to_le_bytes)
+            .collect();
         SkyKeyframe {
             hour,
             crc: 0,
-            inscatter: (0..65_536 * 4)
-                .flat_map(|_| ((next() % 0x0800 + 0x3800) as u16).to_le_bytes())
-                .collect(),
+            inscatter,
             optical_depth: vec![],
             irradiance: vec![],
             sun_depth: vec![],
             sun_irradiance: vec![],
+        }
+    }
+
+    /// A keyframe at `hour` whose every inscatter lane stores the half float `bits`.
+    fn constant_keyframe(hour: f32, bits: u16) -> SkyKeyframe {
+        SkyKeyframe {
+            inscatter: [bits; 65_536 * 4]
+                .into_iter()
+                .flat_map(u16::to_le_bytes)
+                .collect(),
+            ..affine_keyframe(hour)
         }
     }
 
@@ -566,34 +545,77 @@ mod tests {
         }
     }
 
-    /// Both sides call the same `atan` and `powf`, so on one platform they agree to rounding; the tolerance only
-    /// leaves room for the implementation's arithmetic to be regrouped.
-    fn assert_close(actual: [f32; 3], expected: [f32; 3], at: &dyn std::fmt::Debug) {
+    /// The expected values are worked out in f64; the implementation's f32 arithmetic (the path length's
+    /// difference of squares near the horizon above all) and its platform's `atan` and `powf` stay within a few
+    /// 1e-6 of them. Every constant the shading uses moves some value by at least 1e-3.
+    fn assert_close(actual: [f32; 3], expected: [f64; 3], at: &dyn std::fmt::Debug) {
         for (a, e) in actual.into_iter().zip(expected) {
             assert!(
-                (a - e).abs() <= 1e-5 * e.abs(),
-                "{actual:?} against the reference {expected:?} at {at:?}"
+                (f64::from(a) - e).abs() <= 2e-5 * e.abs(),
+                "{actual:?} against the derived {expected:?} at {at:?}"
             );
         }
     }
 
-    /// Clear-sky radiance at 4,000 view, sun and Mie settings, sun heights below the horizon clamp included, is the
-    /// reference shading within 1e-5 relative.
+    /// Clear-sky radiance on `affine_keyframe` against values derived by hand from the plain SunSkyModel pixel
+    /// program's model (the engine wiki's sky-and-atmosphere page; riders-republic-skate docs/sky.md section 6),
+    /// in f64:
+    ///
+    /// - view `d` and sun `s` normalized, `c = d . s`;
+    /// - path length to the top of a 60 km atmosphere over a 6360.19 km ground,
+    ///   `L = -6360.19 d.z + sqrt(6360.19^2 (d.z^2 - 1) + 6420.19^2)`;
+    /// - `u = 1/64 + (atan(3.65587 max(s.z, -0.34202)) - atan(-3.65587 * 0.34202)) /
+    ///   (atan(3.65587) - atan(-3.65587 * 0.34202)) * 31/32`, `v = 0.001047 L + 1/64`, `w = (c + 1) 15/32 + 1/32`;
+    /// - texel coordinates `x = 32u - 1/2`, `y = 32v - 1/2`, `z = 16w - 1/2`, so the encoded sample is
+    ///   (1/2 + x/64, 1/2 + y/64, 1/2 + z/32, 3/4), raised to the fourth power: (r, g, b, a);
+    /// - Rayleigh phase `3/(16 pi) (1 + c^2)`; Cornette-Shanks
+    ///   `P(g) = 3/(8 pi) (1 - g^2)(1 + c^2) / ((2 + g^2)(1 + g^2 - 2gc)^(3/2))`, blended
+    ///   `M = P(mie[0]) (1 - mie[2]) + P(mie[1]) mie[2]`;
+    /// - radiance per lane `l (Rayleigh + a / max(r, 1e-4) k M)`, with k = (1, 0.4296, 0.1752).
     #[test]
-    fn radiance_matches_the_reference_shading() {
-        let mut next = xorshift(0x1234_5678);
-        let key = keyframe(12.0, &mut next);
-        let mut unit = || (next() % 20_001) as f32 / 10_000.0 - 1.0;
-        for _ in 0..4000 {
-            let direction = [unit(), unit(), unit()];
-            let sun = [unit(), unit(), unit()];
-            let mie = [unit() * 0.9, unit() * 0.9, (unit() + 1.0) / 2.0];
-            if [direction, sun].iter().any(|v| v.iter().all(|&v| v == 0.0)) {
-                continue;
-            }
+    fn radiance_is_the_derived_single_scattering_shading() {
+        let key = affine_keyframe(12.0);
+        for (direction, sun, mie, expected) in [
+            // Sun and view at the zenith: c = 1, L = 60, u = 63/64 (x = 31), v = 0.078445 (y = 2.01024),
+            // w = 31/32 (z = 15); encoded (0.984375, 0.53141, 0.96875, 0.75); Rayleigh 0.1193662,
+            // P(0.76) = 2.8299975, P(-0.4) = 0.0338340, M = 1.9911484.
+            (
+                [0.0, 0.0, 1.0],
+                [0.0, 0.0, 1.0],
+                [0.76, -0.4, 0.3],
+                [7.420906685e-1, 3.250658046e-2, 2.086654249e-1],
+            ),
+            // Sun on the horizon, view level at right angles to it: c = 0, L = 875.68419, u = 0.41026048
+            // (x = 12.628335), v = 0.93246635 (y = 29.338923), w = 1/2 (z = 7.5); Rayleigh 0.0596831,
+            // P(0.5) = 0.0284705, P(0.99) = 0.000286070, M = 0.0265596.
+            (
+                [0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.5, 0.99, 0.0678],
+                [2.251515758e-2, 6.324234723e-2, 1.917005806e-2],
+            ),
+            // Sun 53 degrees below the horizon, clamped to s.z = -0.34202, so u = 1/64 (x = 0); view
+            // (3, 0, 4) unnormalized: c = -0.28, L = 74.803895, v = 0.093944678 (y = 2.5062297), w = 0.36875
+            // (z = 5.4); Rayleigh 0.0643623, P(0.76) = 0.00744018, P(-0.4) = 0.0552806, M = 0.0217923.
+            (
+                [3.0, 0.0, 4.0],
+                [0.6, 0.0, -0.8],
+                [0.76, -0.4, 0.3],
+                [1.091786554e-2, 9.443781636e-3, 1.673916104e-2],
+            ),
+            // Everything off-axis and unnormalized: c = 0.12156613, L = 253.16232, u = 0.90096330
+            // (x = 28.330825), v = 0.28068595 (y = 8.4819504), w = 0.55698413 (z = 8.4117460);
+            // Rayleigh 0.0605651, P(-0.3) = 0.0420544, P(0.8) = 0.00950444, M = 0.0225244.
+            (
+                [1.0, 2.0, 0.5],
+                [2.0, -1.0, 1.5],
+                [-0.3, 0.8, 0.6],
+                [5.495240067e-2, 1.031567063e-2, 2.104801330e-2],
+            ),
+        ] {
             assert_close(
                 key.radiance(direction, sun, mie).unwrap(),
-                reference_radiance(&key.inscatter, direction, sun, mie),
+                expected,
                 &(direction, sun, mie),
             );
         }
@@ -601,15 +623,12 @@ mod tests {
 
     /// A sky's radiance at an hour is its keyframes' radiance at the bracketing authored hours, linearly
     /// interpolated, whatever their stored order, with the last keyframe interpolating to the first across midnight
-    /// and hours outside [0, 24) wrapped into it.
+    /// and hours outside [0, 24) wrapped into it. Each keyframe stores one value e in every lane, so its radiance is
+    /// e^4 (Rayleigh + k M); with the view at right angles to the sun and both Mie anisotropies 0, Rayleigh and
+    /// M are both 3/(16 pi), giving e^4 (3/(16 pi)) (2, 1.4296, 1.1752). The keyframes at 06:00, 12:00 and 18:00
+    /// store 1, 3/4 and 1/2: e^4 = 1, 81/256 and 1/16.
     #[test]
     fn stored_radiance_interpolates_between_the_bracketing_hours() {
-        let mut next = xorshift(0x9e37_79b9);
-        let keyframes = vec![
-            keyframe(18.0, &mut next),
-            keyframe(6.0, &mut next),
-            keyframe(12.0, &mut next),
-        ];
         let sky = StoredSky {
             sun_position_mode: 0,
             sun_azimuth: 0.0,
@@ -618,28 +637,42 @@ mod tests {
             sun_color: [0.0; 4],
             sun_intensity: 0.0,
             mie: [0.0; 3],
-            keyframes,
+            keyframes: vec![
+                constant_keyframe(18.0, 0x3800),
+                constant_keyframe(6.0, 0x3c00),
+                constant_keyframe(12.0, 0x3a00),
+            ],
         };
-        let [evening, morning, noon] = [0, 1, 2].map(|i| &sky.keyframes[i].inscatter);
-        let (direction, sun, mie) = ([0.3, -0.2, 0.6], [0.5, 0.4, 0.2], [0.76, -0.4, 0.3]);
-        let at = |table: &[u8]| reference_radiance(table, direction, sun, mie);
-        let lerp = |a: [f32; 3], b: [f32; 3], f: f32| std::array::from_fn(|i| a[i] + (b[i] - a[i]) * f);
-        for (hour, expected) in [
-            (6.0, at(morning)),
-            (9.0, lerp(at(morning), at(noon), 0.5)),
-            (16.5, lerp(at(noon), at(evening), 0.75)),
-            (21.0, lerp(at(evening), at(morning), 0.25)),
-            (3.0, lerp(at(evening), at(morning), 0.75)),
-            (-3.0, lerp(at(evening), at(morning), 0.25)),
-            (33.0, lerp(at(morning), at(noon), 0.5)),
+        let (direction, sun, mie) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0; 3]);
+        // 3/(16 pi) (2, 1.4296, 1.1752)
+        let unit = [0.1193662073189215, 0.0853229649915651, 0.07013958342059827];
+        for (hour, scale) in [
+            (6.0, 1.0),
+            // halfway from 06:00 (1) to 12:00 (81/256)
+            (9.0, 0.658203125),
+            // three quarters from 12:00 (81/256) to 18:00 (1/16)
+            (16.5, 0.1259765625),
+            // a quarter from 18:00 (1/16) to the next 06:00 (1)
+            (21.0, 0.296875),
+            (3.0, 0.765625),
+            (-3.0, 0.296875),
+            (33.0, 0.658203125),
         ] {
-            assert_close(sky.radiance(hour, direction, sun, mie).unwrap(), expected, &hour);
+            assert_close(
+                sky.radiance(hour, direction, sun, mie).unwrap(),
+                unit.map(|u| u * scale),
+                &hour,
+            );
         }
         let one = StoredSky {
             keyframes: vec![sky.keyframes[2].clone()],
             ..sky
         };
-        assert_close(one.radiance(20.0, direction, sun, mie).unwrap(), at(noon), &20.0);
+        assert_close(
+            one.radiance(20.0, direction, sun, mie).unwrap(),
+            unit.map(|u| u * 0.31640625),
+            &20.0,
+        );
     }
 
     #[test]
