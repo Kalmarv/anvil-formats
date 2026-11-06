@@ -17,7 +17,7 @@ A Rust library that reads the data files of Ubisoft's Anvil engine. It reads `.f
 - Reads Riders Republic terrain node layers and decodes their height and material tiles
 - Reads Riders Republic floor heights, world grids, grass, water, decals, impostors, lights and sky settings
 - Reads Shaun White Skateboarding scene entities, collision, spawn markers, grind guidance, lights and materials
-- Reads Shaun White Skateboarding texture maps, meshes, skeletons, animation clips and animation sets, and the SDB2 shader databases beside its forges
+- Reads Shaun White Skateboarding texture maps, meshes, skeletons, animation clips and animation sets, and the SDB2 shader databases beside its forges, compressed or not
 - Keeps every byte it does not interpret as stored, so a record can be compared with its file
 - Returns texture pixels as stored bytes without decoding them
 - Refuses short or malformed data with a typed error that names the field and its offset instead of panicking

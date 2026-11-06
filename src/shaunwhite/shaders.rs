@@ -1,4 +1,10 @@
-//! Uncompressed SDB2 version 39 shader databases (`ekshadersPC*.bin`).
+//! SDB2 version 39 shader databases (`ekshadersPC*.bin`), and their compressed siblings (`ekshadersPC*compress.bin`,
+//! `ekshadersinitpccompress.bin`).
+//!
+//! A compressed database is the byte 0xF5, the uncompressed database's size (u32), then one streamed LZO2A data block
+//! ([`crate::data::read_stream`]) that decodes to exactly that many bytes and ends the file. Each of Shaun White
+//! Skateboarding's three quality levels decodes to its uncompressed sibling byte for byte; the init database has no
+//! uncompressed sibling. [`read`] takes either form.
 //!
 //! Header: `SDB2`, version, source count, active record count, source offset, table offset (six u32).
 //! Each source is name\[64\], CRC-32, byte length, dependency\[4\], then the source bytes. A table row is
@@ -14,7 +20,7 @@
 //!
 //! Native loader evidence distinguishes kind 8 as a state-only pass, not a vertex declaration. Kinds 5..7
 //! retain their utility-stage bytecode; kind 6 only marks its presence in the native loader, so no purpose is
-//! inferred from its program. Compressed siblings and other database versions are refused by name.
+//! inferred from its program. Other database versions are refused by name.
 
 use std::collections::BTreeSet;
 
@@ -150,6 +156,9 @@ pub enum Error {
     /// The database ends before a field is complete.
     #[error("{0}")]
     Field(#[from] FieldError),
+    /// A compressed database's data block can't be read.
+    #[error("compressed SDB2: {0}")]
+    Compressed(#[from] crate::data::Error),
     /// A field has a value the format does not allow (a wrong magic or version, sizes that do not tile, a
     /// name that is not UTF-8, or bytes left over).
     #[error("SDB2 {field} at {at:#x}: {why}")]
@@ -335,17 +344,48 @@ fn effect(bytes: &[u8], origin: usize, state_only: bool) -> Result<Effect> {
     })
 }
 
-/// Read a complete uncompressed SDB2 v39 database. Source CRCs, identities, all spans, reserves and tails are checked.
-/// Stage programs are kept as stored, tagged with their stage by where the record puts them: the bytes are not checked
-/// to be a complete SM3 program of that stage, which a caller that runs or translates them does.
-pub fn read(bytes: &[u8]) -> Result<Database> {
-    let mut h = Reader::new(bytes, 0);
-    if h.bytes(4, "SDB2 magic")? != b"SDB2" {
+/// The first byte of a compressed database.
+pub const COMPRESSED_TAG: u8 = 0xF5;
+
+/// The uncompressed database a compressed one (`ekshadersPC*compress.bin`) holds: its data block decoded to the size
+/// its header states, which must end the file. Refuses bytes that don't start with [`COMPRESSED_TAG`].
+pub fn decompress(bytes: &[u8]) -> Result<Vec<u8>> {
+    let tag = View::new(bytes).u8(0).field("compressed tag")?;
+    if tag != COMPRESSED_TAG {
         return Err(invalid(
             0,
-            "magic",
-            "expected uncompressed SDB2 (compressed siblings are not read here)",
+            "compressed tag",
+            format!("{tag:#04x}, expected {COMPRESSED_TAG:#04x}"),
         ));
+    }
+    let stated = View::new(bytes).u32(1, LE).field("decompressed size")?;
+    let stated = size(stated, 1, "decompressed size")?;
+    let (block, end) = crate::data::read_stream(bytes, 5, stated)?;
+    if end != bytes.len() {
+        return Err(invalid(
+            end,
+            "compressed data",
+            format!("{} bytes after the data block", bytes.len().saturating_sub(end)),
+        ));
+    }
+    Ok(block.data)
+}
+
+/// Read a complete SDB2 v39 database, uncompressed or compressed (starting with [`COMPRESSED_TAG`]: see
+/// [`decompress`]). Source CRCs, identities, all spans, reserves and tails are checked. Stage programs are kept as
+/// stored, tagged with their stage by where the record puts them: the bytes are not checked to be a complete SM3
+/// program of that stage, which a caller that runs or translates them does.
+pub fn read(bytes: &[u8]) -> Result<Database> {
+    if bytes.first() == Some(&COMPRESSED_TAG) {
+        return read_uncompressed(&decompress(bytes)?);
+    }
+    read_uncompressed(bytes)
+}
+
+fn read_uncompressed(bytes: &[u8]) -> Result<Database> {
+    let mut h = Reader::new(bytes, 0);
+    if h.bytes(4, "SDB2 magic")? != b"SDB2" {
+        return Err(invalid(0, "magic", "expected SDB2 or a compressed SDB2 (0xF5)"));
     }
     let version = h.u32("version")?;
     if version != 39 {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 (2026-11-06)
+
+- `shaunwhite::shaders::read` reads the compressed SDB2 databases too (`ekshadersPC{low,med,high}compress.bin`,
+  `ekshadersinitpccompress.bin`), which it refused: the byte 0xF5, the uncompressed size, and one streamed LZO2A data
+  block. `shaders::decompress` gives the uncompressed database; each quality level's decodes to its uncompressed
+  sibling byte for byte, and the init database, which has no sibling, reads (62 sources, 16 records).
+  `data::read_stream` reads the streamed block form (each chunk's marker, sizes and checksum before its bytes, no chunk
+  table). New error variants `data::Error::Marker` and `shaders::Error::Compressed`.
+- tests/sws_shaders.rs: every shader database of the install reads; a compressed database laid out by hand and its
+  refusals.
+
 ## 0.2.1 (2026-11-06)
 
 - Depends on `dxcontainer` 0.5.0 (from crates.io, instead of a git revision), for a crate that uses dx 0.5.0 to

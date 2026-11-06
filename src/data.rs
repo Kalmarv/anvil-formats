@@ -16,6 +16,9 @@
 //! chunks' decoded bytes in order. An entry is two consecutive blocks: a metadata block (16 bytes decoded, kept as
 //! stored) and the resource's. Anything else is refused, naming what it
 //! found. A forge's `GlobalMetaFile` entry has no block magic: it is not data blocks, and is refused as such.
+//!
+//! A streamed block ([`read_stream`]: Shaun White Skateboarding's compressed shader databases) has the same magic and
+//! compression info but no chunk count or table: each chunk carries its own sizes and checksum before its bytes.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
@@ -39,6 +42,10 @@ pub const ALGORITHM_ZSTD: u8 = 5;
 pub const ALGORITHM_LZO2A: u8 = 2;
 /// The checksum's starting value.
 pub const CHECKSUM_INIT: u32 = 0;
+/// The byte before each chunk of a streamed block ([`read_stream`]).
+pub const STREAM_MARKER: u8 = 1;
+/// The size of a streamed block's header: the magic and the compression info.
+const STREAM_HEADER: usize = 15;
 
 /// Why a payload can't be read.
 #[derive(Debug, thiserror::Error)]
@@ -111,6 +118,16 @@ pub enum Error {
         stored: u32,
         /// The checksum computed over the chunk's stored bytes.
         computed: u32,
+    },
+    /// A chunk of a streamed block ([`read_stream`]) does not start with the marker byte 1.
+    #[error("streamed block at {at}, chunk {chunk}: marker {marker}, expected 1")]
+    Marker {
+        /// The offset of the block.
+        at: usize,
+        /// The chunk's position in the block.
+        chunk: usize,
+        /// The byte found.
+        marker: u8,
     },
     /// A chunk failed to decompress.
     #[error("block at {at}: {source}")]
@@ -204,34 +221,15 @@ pub struct Resource {
 /// The block at `at` in `bytes`, checked and decoded, and where the next one starts. `max_decoded` bounds the decoded
 /// size its chunks may declare in all.
 pub fn read_block(bytes: &[u8], at: usize, max_decoded: usize) -> Result<(Block, usize), Error> {
-    let magic = View::new(bytes).u64(at, LE).field("block magic")?;
-    if magic != BLOCK_MAGIC {
-        return Err(Error::Magic { at, found: magic });
-    }
-    // an offset past the address space is past the data: its read is refused
+    let Info {
+        version,
+        algorithm,
+        unknown,
+        decoder,
+    } = info(bytes, at)?;
     let info = |off: usize| at.saturating_add(off);
     let overflow = Error::Overflow;
-    let version = View::new(bytes).u16(info(8), LE).field("compression version")?;
-    if version != VERSION && version != VERSION_1 {
-        return Err(Error::Version { at, version });
-    }
     let narrow = version == VERSION_1;
-    let algorithm = View::new(bytes).u8(info(10)).field("compression algorithm")?;
-    let decoder: &dyn Decompressor = match (version, algorithm) {
-        (VERSION, ALGORITHM_ZSTD) => &Zstd,
-        (VERSION_1, ALGORITHM_LZO2A) => &Lzo2a,
-        _ => {
-            return Err(Error::Algorithm {
-                at,
-                version,
-                algorithm,
-            });
-        }
-    };
-    let unknown = [
-        View::new(bytes).u16(info(11), LE).field("compression info")?,
-        View::new(bytes).u16(info(13), LE).field("compression info")?,
-    ];
     let count = if narrow {
         View::new(bytes).u16(info(15), LE).field("chunk count")?.into()
     } else {
@@ -312,40 +310,151 @@ pub fn read_block(bytes: &[u8], at: usize, max_decoded: usize) -> Result<(Block,
         .checked_add(n.checked_mul(row).ok_or(overflow("chunk table"))?)
         .ok_or(overflow("chunk table"))?;
     for (k, chunk) in chunks.iter_mut().enumerate() {
-        let size = |why| Error::Size {
-            at,
-            chunk: k,
-            stored: chunk.stored_size,
-            decoded: chunk.decoded_size,
-            why,
-        };
         chunk.checksum = View::new(bytes).u32(cursor, LE).field("chunk checksum")?;
         let from = cursor.checked_add(4).ok_or(overflow("chunk"))?;
-        let stored_len =
-            usize::try_from(chunk.stored_size).map_err(|_| size("stored size past this machine"))?;
-        let decoded =
-            usize::try_from(chunk.decoded_size).map_err(|_| size("decoded size past this machine"))?;
-        let stored = View::new(bytes)
-            .slice(from, stored_len)
-            .field("chunk stored bytes")?;
-        let computed = primase_foundations::hash::adler32(CHECKSUM_INIT, stored);
-        if computed != chunk.checksum {
-            return Err(Error::Checksum {
+        cursor = decode_chunk(decoder, bytes, at, k, chunk, from, &mut data)?;
+    }
+    Ok((
+        Block {
+            version,
+            algorithm,
+            unknown,
+            chunks,
+            data,
+        },
+        cursor,
+    ))
+}
+
+/// A block's compression info: the version, algorithm and the two u16 after it, and the decoder they name.
+struct Info {
+    version: u16,
+    algorithm: u8,
+    unknown: [u16; 2],
+    decoder: &'static dyn Decompressor,
+}
+
+/// The block magic at `at` and the 7 bytes of compression info after it.
+fn info(bytes: &[u8], at: usize) -> Result<Info, Error> {
+    let magic = View::new(bytes).u64(at, LE).field("block magic")?;
+    if magic != BLOCK_MAGIC {
+        return Err(Error::Magic { at, found: magic });
+    }
+    // an offset past the address space is past the data: its read is refused
+    let info = |off: usize| at.saturating_add(off);
+    let version = View::new(bytes).u16(info(8), LE).field("compression version")?;
+    if version != VERSION && version != VERSION_1 {
+        return Err(Error::Version { at, version });
+    }
+    let algorithm = View::new(bytes).u8(info(10)).field("compression algorithm")?;
+    let decoder: &'static dyn Decompressor = match (version, algorithm) {
+        (VERSION, ALGORITHM_ZSTD) => &Zstd,
+        (VERSION_1, ALGORITHM_LZO2A) => &Lzo2a,
+        _ => {
+            return Err(Error::Algorithm {
                 at,
-                chunk: k,
-                stored: chunk.checksum,
-                computed,
+                version,
+                algorithm,
             });
         }
-        if stored_len == decoded {
-            data.extend_from_slice(stored);
-        } else {
-            let out = decoder
-                .decompress(stored, decoded)
-                .map_err(|source| Error::Decode { at, source })?;
-            data.extend_from_slice(&out);
+    };
+    let unknown = [
+        View::new(bytes).u16(info(11), LE).field("compression info")?,
+        View::new(bytes).u16(info(13), LE).field("compression info")?,
+    ];
+    Ok(Info {
+        version,
+        algorithm,
+        unknown,
+        decoder,
+    })
+}
+
+/// Checks chunk `k` of the block at `at`, whose stored bytes start at `from` (`chunk.checksum` already read), appends
+/// its decoded bytes to `data`, and returns where its stored bytes end.
+fn decode_chunk(
+    decoder: &dyn Decompressor,
+    bytes: &[u8],
+    at: usize,
+    k: usize,
+    chunk: &Chunk,
+    from: usize,
+    data: &mut Vec<u8>,
+) -> Result<usize, Error> {
+    let size = |why| Error::Size {
+        at,
+        chunk: k,
+        stored: chunk.stored_size,
+        decoded: chunk.decoded_size,
+        why,
+    };
+    let stored_len = usize::try_from(chunk.stored_size).map_err(|_| size("stored size past this machine"))?;
+    let decoded = usize::try_from(chunk.decoded_size).map_err(|_| size("decoded size past this machine"))?;
+    let stored = View::new(bytes)
+        .slice(from, stored_len)
+        .field("chunk stored bytes")?;
+    let computed = primase_foundations::hash::adler32(CHECKSUM_INIT, stored);
+    if computed != chunk.checksum {
+        return Err(Error::Checksum {
+            at,
+            chunk: k,
+            stored: chunk.checksum,
+            computed,
+        });
+    }
+    if stored_len == decoded {
+        data.extend_from_slice(stored);
+    } else {
+        let out = decoder
+            .decompress(stored, decoded)
+            .map_err(|source| Error::Decode { at, source })?;
+        data.extend_from_slice(&out);
+    }
+    from.checked_add(stored_len).ok_or(size("chunk past the entry"))
+}
+
+/// The streamed form of a block at `at` in `bytes`, which decodes to exactly `decoded_size` bytes, checked and
+/// decoded, and where it ends. Shaun White Skateboarding's compressed shader databases (`ekshadersPC*compress.bin`)
+/// hold one. Its header is a block's (magic, version 1, algorithm 2 (LZO2A), two u16: 32768 and 0 in every one) with
+/// no chunk count or table: each chunk is a marker byte (1), its stored size, decoded size and checksum (u32 each,
+/// the checksum as in a block), then its stored bytes; the chunks run until their decoded sizes reach
+/// `decoded_size`. A marker other than 1, or chunks whose decoded sizes pass `decoded_size`, are refused.
+pub fn read_stream(bytes: &[u8], at: usize, decoded_size: usize) -> Result<(Block, usize), Error> {
+    let Info {
+        version,
+        algorithm,
+        unknown,
+        decoder,
+    } = info(bytes, at)?;
+    let mut cursor = at.checked_add(STREAM_HEADER).ok_or(Error::Overflow("stream"))?;
+    let mut chunks = Vec::new();
+    // grown chunk by chunk, so a stated size the chunks don't back allocates nothing
+    let mut data = Vec::new();
+    while data.len() < decoded_size {
+        let k = chunks.len();
+        let marker = View::new(bytes).u8(cursor).field("chunk marker")?;
+        if marker != STREAM_MARKER {
+            return Err(Error::Marker { at, chunk: k, marker });
         }
-        cursor = from.checked_add(stored_len).ok_or(size("chunk past the entry"))?;
+        let field = |off: usize, what| View::new(bytes).u32(cursor.saturating_add(off), LE).field(what);
+        let chunk = Chunk {
+            stored_size: field(1, "chunk stored size")?,
+            decoded_size: field(5, "chunk decoded size")?,
+            checksum: field(9, "chunk checksum")?,
+        };
+        let remaining = decoded_size.saturating_sub(data.len());
+        if usize::try_from(chunk.decoded_size).map_or(true, |d| d > remaining) {
+            return Err(Error::Size {
+                at,
+                chunk: k,
+                stored: chunk.stored_size,
+                decoded: chunk.decoded_size,
+                why: "decoded sizes over the stated bound",
+            });
+        }
+        let from = cursor.checked_add(13).ok_or(Error::Overflow("chunk"))?;
+        cursor = decode_chunk(decoder, bytes, at, k, &chunk, from, &mut data)?;
+        chunks.push(chunk);
     }
     Ok((
         Block {
