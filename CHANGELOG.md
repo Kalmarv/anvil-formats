@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 (2026-11-07)
+
+- Depends on dxcontainer 0.11.0 (was 0.5.0), the version dx's readers 0.11 use, so a program linking both builds one
+  dxcontainer. `dxcontainer::checksum` and `dxcontainer::chunks`, the two this crate calls, are unchanged.
+
 ## 0.5.0 (2026-11-06)
 
 - `data`: `read_block` and `read_entry` refuse a streamed block as one (`Error::Streamed`, new): bit 15 of the second

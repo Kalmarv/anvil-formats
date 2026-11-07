@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-formats"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "dxcontainer",
  "primase-foundations",
@@ -201,9 +201,9 @@ dependencies = [
 
 [[package]]
 name = "dxcontainer"
-version = "0.5.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af62c58aff5d90b000bdf31f191f1d6dc2243edaa8fa0dae25bafaf5bc6ba977"
+checksum = "434e78a929a111671777fe4ca0a81aaabb51a51483b0acc0cf0653f6234b2136"
 dependencies = [
  "primase-foundations",
  "thiserror",
