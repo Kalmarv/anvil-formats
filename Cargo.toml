@@ -36,7 +36,7 @@ repository = "https://github.com/Kalmarv/anvil-formats"
 publish = true
 
 [workspace.dependencies]
-dxcontainer = "0.5.0"
+dxcontainer = "0.12.0"
 primase-foundations = "0.3.1"
 sha2 = "0.10"
 primase-testdata = "0.1.8"
