@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Depends on dxcontainer 0.12.0 (was 0.11.0), the version dx's readers 0.12 and iridia use, so a program linking both builds one
+  dxcontainer. `dxcontainer::checksum` and `dxcontainer::chunks` are unchanged.
+
 ## 0.5.1 (2026-11-07)
 
 - Depends on dxcontainer 0.11.0 (was 0.5.0), the version dx's readers 0.11 use, so a program linking both builds one
